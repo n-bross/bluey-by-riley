@@ -27,7 +27,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Bluey talks to the character on your iPhone over your local network.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Hold the talk shortcut (⌃⌥Space by default) or the mic button and talk to Bluey.</string>
+	<string>Hold the talk shortcut (⌃⌥Space by default) or the mic button to talk to Bluey, or start a call recording to capture your microphone.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Bluey turns what you say into text so it can answer you.</string>
 </dict>

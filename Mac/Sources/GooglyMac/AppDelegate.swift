@@ -13,6 +13,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let pairingPanel = PairingPanel()
     private let avatarWindow = AvatarWindow()
     private let quickNotes = QuickNotesWindow()
+    private lazy var meetingWindow: Any? = {
+        if #available(macOS 15, *) { return MeetingWindow() }
+        return nil
+    }()
+
+    @available(macOS 15, *)
+    private var meetings: MeetingWindow? { meetingWindow as? MeetingWindow }
     private lazy var host = RealtimeHost(overlay: overlay, codex: codex)
     private lazy var bridge = HermesBridge(server: server, host: host, focus: focus)
     private lazy var notch = NotchController(host: host, focus: focus, hermes: bridge.hermes)
@@ -231,6 +238,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         workspaceWindow.show()
         return true
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if #available(macOS 15, *), let meetings, meetings.recording || meetings.changingCapture {
+            Task {
+                await meetings.stop()
+                while meetings.changingCapture { try? await Task.sleep(for: .milliseconds(50)) }
+                await meetings.stop()
+                sender.reply(toApplicationShouldTerminate: true)
+            }
+            return .terminateLater
+        }
+        return .terminateNow
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -549,6 +569,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }.fire()
     }
 
+    @objc private func openMeetings() {
+        if #available(macOS 15, *) { meetings?.show() }
+    }
+
     @objc private func openNotes() {
         try? FileManager.default.createDirectory(at: MeetingNotes.root, withIntermediateDirectories: true)
         NSWorkspace.shared.open(MeetingNotes.root)
@@ -672,6 +696,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(submenu(codex.approvals.isEmpty ? "Codex" : "Codex (waiting for you)", codexMenu))
         }
         menu.addItem(shortcutItem("Quick Notes", #selector(toggleQuickNotes), .notes))
+        if #available(macOS 15, *), let meetings {
+            let title = meetings.recording ? "Call-Notizen · Aufnahme läuft …" : "Call-Notizen …"
+            menu.addItem(item(title, #selector(openMeetings)))
+        }
         menu.addItem(item("Open Meeting Notes", #selector(openNotes)))
         menu.addItem(.separator())
 

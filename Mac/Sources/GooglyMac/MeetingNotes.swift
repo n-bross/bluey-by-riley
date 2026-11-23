@@ -94,7 +94,7 @@ enum MeetingNotes {
         return turns
     }
 
-    private static func plain(_ audio: Data) async throws -> [Segment] {
+    static func plain(_ audio: Data) async throws -> [Segment] {
         let json = try await post(audio, fields: ["model": fallbackModel, "response_format": "json"])
         let text = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? [] : [Segment(speaker: "?", start: 0, end: 0, text: text)]
