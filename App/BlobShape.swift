@@ -1,4 +1,12 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+#if canImport(GooglyShared)
+import GooglyShared
+#endif
 
 extension Color {
     init(hex: UInt32, opacity: Double = 1) {
@@ -26,6 +34,8 @@ enum UIFontCheck {
     private static let families: Set<String> = {
         #if canImport(UIKit)
         return Set(UIFont.familyNames)
+        #elseif canImport(AppKit)
+        return Set(NSFontManager.shared.availableFontFamilies)
         #else
         return []
         #endif

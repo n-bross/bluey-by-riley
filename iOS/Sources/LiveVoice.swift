@@ -63,7 +63,7 @@ final class LiveVoice: NSObject, ObservableObject {
     }
 
     private var socket: URLSessionWebSocketTask?
-    private let engine = AVAudioEngine()
+    private var engine: AVAudioEngine { BlueyAudio.engine }
     private let player = AVAudioPlayerNode()
     private var converter: AVAudioConverter?
     private let wireFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 24000, channels: 1, interleaved: true)!
@@ -98,7 +98,7 @@ final class LiveVoice: NSObject, ObservableObject {
     }
 
     func wake() {
-        guard state == .asleep else { return }
+        guard state == .asleep, !BlueyAudio.callActive else { return }
         wantAwake = true
         setState(.waking)
         AVAudioApplication.requestRecordPermission { granted in
@@ -187,7 +187,7 @@ final class LiveVoice: NSObject, ObservableObject {
 
     /// The chirp on its own, for when he's asleep and the audio engine is off.
     func chirpAlone() {
-        guard state == .asleep else { return }
+        guard state == .asleep, !BlueyAudio.callActive else { return }
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
@@ -199,7 +199,7 @@ final class LiveVoice: NSObject, ObservableObject {
         player.play()
         chirp(syllables: 3)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let self, self.state == .asleep else { return }
+            guard let self, self.state == .asleep, !BlueyAudio.callActive else { return }
             self.player.stop()
             self.engine.stop()
         }
@@ -522,6 +522,8 @@ final class LiveVoice: NSObject, ObservableObject {
     }
 
     private func stopAudio() {
+        // A running call owns the engine and the audio session.
+        guard !BlueyAudio.callActive else { player.stop(); return }
         engine.inputNode.removeTap(onBus: 0)
         player.stop()
         engine.stop()

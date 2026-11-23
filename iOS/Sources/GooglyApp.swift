@@ -5,87 +5,113 @@ import UIKit
 
 @main
 struct GooglyApp: App {
+    @UIApplicationDelegateAdaptor(OrientationDelegate.self) private var orientation
     var body: some Scene {
         WindowGroup {
-            RootView()
+            AppShell()
         }
     }
 }
 
-struct RootView: View {
+/// Lets the face screen lock landscape while the rest of the app turns freely.
+final class OrientationDelegate: NSObject, UIApplicationDelegate {
+    static var mask: UIInterfaceOrientationMask = .allButUpsideDown
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Self.mask
+    }
+
+    static func lock(_ mask: UIInterfaceOrientationMask, prefer: UIInterfaceOrientationMask) {
+        Self.mask = mask
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: prefer)) { _ in }
+        }
+    }
+}
+
+/// The Bluey app on the iPhone: the workspace tabs, with his face one tap away.
+/// Owns the Mac link, voice, focus and workspace so they keep running whichever screen is showing.
+struct AppShell: View {
     @StateObject private var link = MacLink()
     @StateObject private var live = LiveVoice()
     @StateObject private var store = SessionStore()
     @StateObject private var focus = FocusClient()
+    @StateObject private var call = CallSession()
+    @State private var showCall = false
+    @State private var workspace: PhoneWorkspace?
+    @State private var animator = FaceAnimator()
+    @State private var showFace = false
     @State private var showFocus = false
     @State private var scanPairing = false
-    @State private var showApp = false
+    @State private var showSettings = false
+    @AppStorage("workspaceTab") private var tabRaw = WorkspaceTab.chat.rawValue
     @Environment(\.scenePhase) private var scenePhase
-    @State private var animator = FaceAnimator()
-    @State private var showPairing = true
-    @State private var holdStart: DispatchWorkItem?
-    @State private var holdingToAsk = false
 
     var body: some View {
-        ZStack {
-            FaceView(animator: animator)
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) { live.toggle() }  // double tap: wake up / back to follow mode
-                .simultaneousGesture(holdToAsk)
-
-            ModeIndicator(state: live.state)
-
-            FocusFaceHUD(focus: focus, link: link, live: live, open: { showFocus = true }, pair: { scanPairing = true })
-            SoundButton(link: link, live: live)
-
-            // Bluey's app: sessions, transcripts and settings.
-            Button { showApp = true } label: {
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.35))
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(Color.white.opacity(0.06)).frame(width: 34, height: 34))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open Bluey")
-            .padding(.top, 10)
-            .padding(.trailing, 62)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-
-            if showPairing && !link.connected {
-                PairingView { withAnimation(.easeOut(duration: 0.3)) { showPairing = false; scanPairing = true } }
-                    .transition(.opacity)
+        Group {
+            if let workspace {
+                WorkspaceRootView(
+                    model: workspace.model,
+                    tab: Binding(get: { WorkspaceTab(rawValue: tabRaw) ?? .chat }, set: { tabRaw = $0.rawValue }),
+                    connectionName: link.macName ?? link.currentMac,
+                    face: { Color.black },
+                    settings: { settings },
+                    showSettings: $showSettings,
+                    openFace: { showFace = true })
+            } else {
+                Color.black
             }
         }
-        .background(Color.black)
-        .ignoresSafeArea()
-        .phoneChrome()
-        .fullScreenCover(isPresented: $showApp) {
-            BlueyAppView(store: store, live: live, link: link, focus: focus, openFocus: { showApp = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showFocus = true } }, pairMac: { showApp = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { scanPairing = true } }) { showApp = false }
+        .fullScreenCover(isPresented: $showCall) {
+            CallView(call: call) { showCall = false; call.reset() }
         }
-        .sheet(isPresented: $showFocus) { FocusDashboard(focus: focus, link: link) }
-        .sheet(isPresented: $scanPairing) { QRPairingView(link: link) }
-        .onAppear {
-            focus.attach(link)
-            focus.onFinished = { showFocus = true; live.sleep() }
-            link.onFocusState = { [focus] in focus.receive($0) }
-            link.onFace = { [animator] face in animator.receive(face, at: Date().timeIntervalSinceReferenceDate) }
-            animator.localTalk = { [live] in live.level }
-            wireLiveVoice()
-            link.start()
+        .onOpenURL { url in
+            guard url.scheme == "bluey" else { return }
+            switch url.host {
+            case "call":
+                // From the Live Activity: open a call (or the running one).
+                showFace = false
+                startCall(threadID: nil)
+            case "pomodoro":
+                showFace = false; showSettings = false
+                tabRaw = WorkspaceTab.pomodoro.rawValue
+            default:
+                break
+            }
         }
+        .fullScreenCover(isPresented: $showFace) {
+            FaceScreen(link: link, live: live, focus: focus, animator: animator,
+                       showFocus: $showFocus, scanPairing: $scanPairing, close: { showFace = false })
+        }
+        // While his face is up, it presents these itself.
+        .sheet(isPresented: Binding(get: { scanPairing && !showFace }, set: { scanPairing = $0 })) { QRPairingView(link: link) }
+        .sheet(isPresented: Binding(get: { showFocus && !showFace }, set: { showFocus = $0 })) { FocusDashboard(focus: focus, link: link) }
+        .onAppear(perform: start)
         .onChange(of: link.connected) { _, connected in
             focus.connectionChanged(connected)
+            workspace?.connectionChanged(connected)
             if !connected { live.sleep() }
             if connected {
-                withAnimation(.easeOut(duration: 0.4)) { showPairing = false }
                 NotesSync.retryPending(store: store, link: link)
                 store.resyncRecent()
             }
         }
+        .onChange(of: live.state) { old, new in
+            // Waking him (here or with ⌥Space on the Mac) brings up his face.
+            if old == .asleep, new != .asleep, !showFace { showSettings = false; showFace = true }
+        }
+        .onChange(of: focus.history.count) { _, _ in workspace?.model.focusHistory = focus.history }
+        .onChange(of: focus.current) { _, current in workspace?.model.currentFocus = current }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { link.start() }
-            else {
+            if phase == .active {
+                link.start()
+                if !call.isActive { BlueyLiveActivity.endAll() }
+            } else {
+                // Leaving the app: Bluey waits on the Lock Screen and in the Dynamic Island.
+                // A running pomodoro has its own Live Activity; one is enough.
+                if !call.isActive, !PomodoroLiveActivity.isShowing { BlueyLiveActivity.show(.ready) }
+                // A call keeps running (voice, screen sharing and the Mac link) while you're in other apps.
+                guard !call.isActive else { return }
                 focus.command("focusPause")
                 live.sleep()
                 if phase == .background { link.stop() }
@@ -93,36 +119,70 @@ struct RootView: View {
         }
     }
 
-    /// Press and hold the screen to ask him something; let go and he answers.
-    private var holdToAsk: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { _ in
-                guard holdStart == nil, !holdingToAsk else { return }
-                let work = DispatchWorkItem {
-                    holdingToAsk = true
-                    #if canImport(UIKit)
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    #endif
-                    live.beginAsk()
-                }
-                holdStart = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)  // a quick tap isn't a hold
+    private var settings: some View {
+        BlueyAppView(store: store, live: live, link: link, focus: focus,
+                     openFocus: { showSettingsThen { showFocus = true } },
+                     pairMac: { showSettingsThen { scanPairing = true } }) { showSettings = false }
+    }
+
+    private func showSettingsThen(_ action: @escaping () -> Void) {
+        showSettings = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: action)
+    }
+
+    /// Opens the call screen and starts a call for a chat (or shows the call that's already running).
+    private func startCall(threadID: UUID?) {
+        showCall = true
+        guard !call.isActive else { return }
+        if live.state != .asleep { live.sleep() }
+        let context = workspace?.model.thread(threadID).map { thread in
+            thread.messages.suffix(12).map { ($0.role == .user ? "User: " : "Bluey: ") + $0.text.prefix(600) }.joined(separator: "\n")
+        }
+        call.start(threadID: threadID, context: context)
+    }
+
+    private func wireCall(workspace: PhoneWorkspace) {
+        call.requestToken = { [link] context, done in
+            link.request(Packet(command: "callToken", text: context)) { reply in done(reply?.text) }
+        }
+        call.runTool = { [link] name, arguments, done in
+            link.request(Packet(command: "tool", tool: name, text: arguments)) { reply in
+                done(reply?.text ?? "The Mac didn't answer.", reply?.image)
             }
-            .onEnded { _ in
-                holdStart?.cancel()
-                holdStart = nil
-                if holdingToAsk {
-                    holdingToAsk = false
-                    #if canImport(UIKit)
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    #endif
-                    live.endAsk()
-                }
-            }
+        }
+        call.onChange = { [call] in BlueyLiveActivity.update(from: call) }
+        call.onEnded = { [weak model = workspace.model, call] threadID, lines in
+            model?.appendCall(threadID: threadID, lines: lines.map { ($0.fromUser, $0.text) }, started: call.startedAt ?? Date())
+            BlueyLiveActivity.endAll()
+        }
+        workspace.model.startCall = { threadID in startCall(threadID: threadID) }
+    }
+
+    private func start() {
+        guard workspace == nil else { return }
+        let workspace = PhoneWorkspace(link: link)
+        wireCall(workspace: workspace)
+        workspace.model.focusHistory = focus.history
+        workspace.model.focusCommand = { [focus] command, task, minutes in
+            focus.command(command, task: task, minutes: minutes)
+            return ""
+        }
+        workspace.model.onPomodoro = { [weak model = workspace.model] in
+            if let model { PomodoroLiveActivity.update(from: model.snapshot) }
+        }
+        PomodoroLiveActivity.update(from: workspace.model.snapshot)
+        self.workspace = workspace
+        focus.attach(link)
+        focus.onFinished = { showFocus = true; live.sleep() }
+        link.onFocusState = { [focus] in focus.receive($0) }
+        link.onFace = { [animator] face in animator.receive(face, at: Date().timeIntervalSinceReferenceDate) }
+        animator.localTalk = { [live] in live.level }
+        wireLiveVoice(workspace: workspace)
+        link.start()
     }
 
     /// Connects the live voice to the Mac: keys, tools, captions and wake/sleep.
-    private func wireLiveVoice() {
+    private func wireLiveVoice(workspace: PhoneWorkspace) {
         live.requestToken = { [link] done in
             link.request(Packet(command: "realtimeToken")) { reply in done(reply?.text) }
         }
@@ -131,10 +191,7 @@ struct RootView: View {
                 done(reply?.text ?? "The Mac didn't answer.", reply?.image)
             }
         }
-        live.onSessionStart = { [store] in
-            // Focus voice is ephemeral. Do not record meeting audio by default.
-            store.start()
-        }
+        live.onSessionStart = { [store] in store.start() }
         live.resumeContext = { [store] in store.recentText() }
         live.recorder.onChunk = { [store, link] chunk in
             store.addPending(chunk.sessionID, index: chunk.index, started: chunk.started)
@@ -173,7 +230,8 @@ struct RootView: View {
             }
         }
         live.onCodexNote = { [store] text in store.codex(text) }
-        link.onCommand = { [live, focus] command, text in
+        link.onCommand = { [live, focus, workspace] command, text in
+            if workspace.receive(command: command, text: text) { return }
             switch command {
             case "wake": live.wake()
             case "sleep": live.sleep()
@@ -185,6 +243,94 @@ struct RootView: View {
             default: break
             }
         }
+    }
+}
+
+/// His face, full screen and sideways under the Mac monitor: eyes follow your mouse, hold to talk.
+struct FaceScreen: View {
+    @ObservedObject var link: MacLink
+    @ObservedObject var live: LiveVoice
+    @ObservedObject var focus: FocusClient
+    let animator: FaceAnimator
+    @Binding var showFocus: Bool
+    @Binding var scanPairing: Bool
+    var close: () -> Void
+    @State private var showPairing = true
+    @State private var holdStart: DispatchWorkItem?
+    @State private var holdingToAsk = false
+
+    var body: some View {
+        ZStack {
+            FaceView(animator: animator)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { live.toggle() }  // double tap: wake up / back to follow mode
+                .simultaneousGesture(holdToAsk)
+
+            ModeIndicator(state: live.state)
+
+            FocusFaceHUD(focus: focus, link: link, live: live, open: { showFocus = true }, pair: { scanPairing = true })
+            SoundButton(link: link, live: live)
+
+            // Back to the app: chat, todos, notes, pomodoro and statistics.
+            Button(action: close) {
+                Image(systemName: "square.grid.2x2.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.white.opacity(0.06)).frame(width: 34, height: 34))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Zurück zur App")
+            .padding(.top, 10)
+            .padding(.trailing, 62)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+
+            if showPairing && !link.connected {
+                PairingView { withAnimation(.easeOut(duration: 0.3)) { showPairing = false; scanPairing = true } }
+                    .transition(.opacity)
+            }
+        }
+        .background(Color.black)
+        .ignoresSafeArea()
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+        .sheet(isPresented: $showFocus) { FocusDashboard(focus: focus, link: link) }
+        .sheet(isPresented: $scanPairing) { QRPairingView(link: link) }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+            OrientationDelegate.lock(.landscape, prefer: .landscapeRight)
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            OrientationDelegate.lock(.allButUpsideDown, prefer: .portrait)
+        }
+        .onChange(of: link.connected) { _, connected in
+            if connected { withAnimation(.easeOut(duration: 0.4)) { showPairing = false } }
+        }
+    }
+
+    /// Press and hold the screen to ask him something; let go and he answers.
+    private var holdToAsk: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { _ in
+                guard holdStart == nil, !holdingToAsk else { return }
+                let work = DispatchWorkItem {
+                    holdingToAsk = true
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    live.beginAsk()
+                }
+                holdStart = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)  // a quick tap isn't a hold
+            }
+            .onEnded { _ in
+                holdStart?.cancel()
+                holdStart = nil
+                if holdingToAsk {
+                    holdingToAsk = false
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    live.endAsk()
+                }
+            }
     }
 }
 
@@ -218,9 +364,7 @@ struct ModeIndicator: View {
         }
     }
     private static let screenCornerRadius: CGFloat = {
-        #if canImport(UIKit)
         if let radius = UIScreen.main.value(forKey: "_displayCornerRadius") as? CGFloat, radius > 0 { return radius }
-        #endif
         return 55
     }()
     var body: some View {
@@ -234,19 +378,5 @@ struct ModeIndicator: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .animation(.easeInOut(duration: 0.25), value: state)
-    }
-}
-
-private extension View {
-    /// Hides the status bar and home indicator and keeps the screen awake.
-    func phoneChrome() -> some View {
-        #if os(iOS)
-        return self
-            .statusBarHidden(true)
-            .persistentSystemOverlays(.hidden)
-            .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        #else
-        return self
-        #endif
     }
 }
