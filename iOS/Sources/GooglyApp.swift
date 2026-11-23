@@ -13,7 +13,7 @@ struct GooglyApp: App {
     }
 }
 
-/// Lets the face screen lock landscape while the rest of the app turns freely.
+/// Controls orientation for the Hub and the explicit avatar preview.
 final class OrientationDelegate: NSObject, UIApplicationDelegate {
     static var mask: UIInterfaceOrientationMask = .allButUpsideDown
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
@@ -29,7 +29,7 @@ final class OrientationDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
-/// The Bluey app on the iPhone: the workspace tabs, with his face one tap away.
+/// The Bluey app on the iPhone: workspace in portrait, face in landscape.
 /// Owns the Mac link, voice, focus and workspace so they keep running whichever screen is showing.
 struct AppShell: View {
     @StateObject private var link = MacLink()
@@ -57,12 +57,11 @@ struct AppShell: View {
             if let workspace {
                 WorkspaceRootView(
                     model: workspace.model,
-                    tab: Binding(get: { WorkspaceTab(rawValue: tabRaw) ?? .chat }, set: { tabRaw = $0.rawValue }),
+                    tab: Binding(get: { workspaceTab }, set: { tabRaw = $0.rawValue }),
                     connectionName: link.macName ?? link.currentMac,
                     face: { Color.black },
                     settings: { settings },
-                    showSettings: $showSettings,
-                    openFace: { showFace = true })
+                    showSettings: $showSettings)
             } else {
                 Color.black
             }
@@ -84,7 +83,7 @@ struct AppShell: View {
                 break
             }
         }
-        .fullScreenCover(isPresented: $showFace) {
+        .fullScreenCover(isPresented: $showFace, onDismiss: { testingAvatar = false }) {
             FaceScreen(link: link, live: live, focus: focus, hermes: hermes, animator: animator,
                        showFocus: $showFocus, scanPairing: $scanPairing, testingAvatar: $testingAvatar,
                        openHermes: { showFace = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showHermes = true } },
@@ -94,12 +93,22 @@ struct AppShell: View {
         // Hermes (through the Mac) and the hub (chats, todos and notes without the Mac).
         .fullScreenCover(isPresented: $showHermes) { HermesView(hermes: hermes, link: link) }
         .fullScreenCover(isPresented: $showHub, onDismiss: { OrientationLock.set(.portrait) }) {
-            HubRootView(hub: hub) { showHub = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showFace = true } }
+            HubRootView(hub: hub) { showHub = false }
         }
         // While his face is up, it presents these itself.
         .sheet(isPresented: Binding(get: { scanPairing && !showFace }, set: { scanPairing = $0 })) { QRPairingView(link: link) }
         .sheet(isPresented: Binding(get: { showFocus && !showFace }, set: { showFocus = $0 })) { FocusDashboard(focus: focus, link: link) }
-        .onAppear(perform: start)
+        .onAppear {
+            start()
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            updateFaceForOrientation()
+        }
+        .onDisappear {
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            updateFaceForOrientation()
+        }
         .onChange(of: link.connected) { _, connected in
             focus.connectionChanged(connected)
             workspace?.connectionChanged(connected)
@@ -110,15 +119,12 @@ struct AppShell: View {
                 store.resyncRecent()
             }
         }
-        .onChange(of: live.state) { old, new in
-            // Waking him (here or with ⌥Space on the Mac) brings up his face.
-            if old == .asleep, new != .asleep, !showFace { showSettings = false; showFace = true }
-        }
         .onChange(of: focus.history.count) { _, _ in workspace?.model.focusHistory = focus.history }
         .onChange(of: focus.current) { _, current in workspace?.model.currentFocus = current }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 link.start()
+                updateFaceForOrientation()
                 if !call.isActive { BlueyLiveActivity.endAll() }
             } else {
                 // Leaving the app: Bluey waits on the Lock Screen and in the Dynamic Island.
@@ -130,6 +136,21 @@ struct AppShell: View {
                 live.sleep()
                 if phase == .background { link.stop() }
             }
+        }
+    }
+
+    private var workspaceTab: WorkspaceTab {
+        let tab = WorkspaceTab(rawValue: tabRaw) ?? .chat
+        return tab == .face ? .chat : tab
+    }
+
+    private func updateFaceForOrientation() {
+        let orientation = UIDevice.current.orientation
+        if orientation.isPortrait {
+            showFace = false
+        } else if orientation.isLandscape,
+                  !showSettings, !showCall, !showHub, !showHermes, !scanPairing, !showFocus {
+            showFace = true
         }
     }
 
@@ -290,6 +311,7 @@ struct FaceScreen: View {
     @State private var showPairing = true
     @State private var holdStart: DispatchWorkItem?
     @State private var holdingToAsk = false
+    @State private var locksPreviewOrientation = false
 
     var body: some View {
         ZStack {
@@ -349,7 +371,7 @@ struct FaceScreen: View {
 
             if showPairing && !link.connected {
                 PairingView(onPlay: { withAnimation(.easeOut(duration: 0.3)) { showPairing = false; scanPairing = true } },
-                            openHub: openHub)
+                            openHub: openHub, openWorkspace: close)
                     .transition(.opacity)
             }
         }
@@ -361,11 +383,16 @@ struct FaceScreen: View {
         .sheet(isPresented: $scanPairing) { QRPairingView(link: link) }
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            OrientationDelegate.lock(.landscape, prefer: .landscapeRight)
+            locksPreviewOrientation = testingAvatar
+            if locksPreviewOrientation {
+                OrientationDelegate.lock(.landscape, prefer: .landscapeRight)
+            }
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
-            OrientationDelegate.lock(.allButUpsideDown, prefer: .portrait)
+            if locksPreviewOrientation {
+                OrientationDelegate.lock(.allButUpsideDown, prefer: .portrait)
+            }
         }
         .onChange(of: link.connected) { _, connected in
             if connected { withAnimation(.easeOut(duration: 0.4)) { showPairing = false } }

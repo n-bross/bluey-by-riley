@@ -156,6 +156,7 @@ final class HubClient: ObservableObject {
     @Published var notes: [HubNote] = []
     @Published var todos: [HubTodo] = []
 
+    private var todoAddRevision = 0
     private var lastChanges: [String: Double] = [:]
     private var poller: Task<Void, Never>?
 
@@ -342,14 +343,22 @@ final class HubClient: ObservableObject {
     // MARK: Todos
 
     func refreshTodos() async {
-        if let json = try? await call("todos"), let list = try? decode([HubTodo].self, json) { todos = list }
+        let revision = todoAddRevision
+        guard let json = try? await call("todos"),
+              revision == todoAddRevision,
+              let list = try? decode([HubTodo].self, json) else { return }
+        todos = list
     }
 
     func addTodo(_ title: String, due: String? = nil, list: String = "Inbox") async throws {
         var b: [String: Any] = ["title": title, "list": list]
         if let due { b["due"] = due }
-        _ = try await call("todos", method: "POST", body: b)
-        await refreshTodos()
+        let json = try await call("todos", method: "POST", body: b)
+        let todo = try decode(HubTodo.self, json)
+        todoAddRevision += 1
+        todos = (todos.filter { $0.id != todo.id } + [todo]).sorted {
+            ($0.done ? 1 : 0, $0.due ?? "9999", $0.created) < ($1.done ? 1 : 0, $1.due ?? "9999", $1.created)
+        }
     }
 
     func updateTodo(_ id: String, _ changes: [String: Any]) async {

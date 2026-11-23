@@ -178,7 +178,7 @@ struct FocusDashboard: View {
                     }
                     PomodoroSettingsView(focus: focus).disabled(!link.connected)
                     if !focus.message.isEmpty { Text(focus.message).font(.plexSans(13)).foregroundStyle(.secondary) }
-                    Text("While focusing, Bluey sends your main Mac display, task, elapsed time, idle duration and recent check results to OpenAI every \(focus.developerMode ? 10 : 30) real seconds. Brief detours are fine. Stillness isn't distraction.")
+                    Text("While focusing, Bluey sends the Mac display with your active window, task, elapsed time, idle duration and recent check results to OpenAI every \(focus.developerMode ? 10 : 15) real seconds. Brief detours are fine. Stillness isn't distraction.")
                         .font(.plexSans(13)).foregroundStyle(.secondary)
                     Text("Screen Recording is required on Mac; microphone is needed for voice. Screenshots aren't saved by Bluey. Pause, end, lock, sleep or disconnect stops capture. Resume is always manual. OpenAI processing follows your API account's data controls.")
                         .font(.plexSans(13)).foregroundStyle(.secondary)

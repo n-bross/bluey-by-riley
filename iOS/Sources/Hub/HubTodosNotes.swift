@@ -12,30 +12,46 @@ struct TodosView: View {
     @State private var pickingDate = false
     @FocusState private var adding: Bool
 
-    private var today: String { day(Date()) }
+    @State private var isAdding = false
+    @State private var addError = false
 
     private func day(_ d: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX"); return f.string(from: d)
     }
 
-    private var groups: [(String, [HubTodo])] {
-        let open = hub.todos.filter { !$0.done }
-        let g: [(String, [HubTodo])] = [
-            ("Overdue", open.filter { ($0.due ?? "9999") < today }),
-            ("Today", open.filter { $0.due == today }),
-            ("Upcoming", open.filter { ($0.due ?? "") > today }),
-            ("No date", open.filter { $0.due == nil }),
-            ("Done", hub.todos.filter(\.done)),
-        ]
-        return g.filter { !$0.1.isEmpty }
+    private func groups(today: String) -> [(String, [HubTodo])] {
+        var overdue: [HubTodo] = [], current: [HubTodo] = [], upcoming: [HubTodo] = []
+        var undated: [HubTodo] = [], done: [HubTodo] = []
+        for todo in hub.todos {
+            if todo.done { done.append(todo) }
+            else if let due = todo.due, !due.isEmpty {
+                if due < today { overdue.append(todo) }
+                else if due == today { current.append(todo) }
+                else { upcoming.append(todo) }
+            } else {
+                undated.append(todo)
+            }
+        }
+        return [("Overdue", overdue), ("Today", current), ("Upcoming", upcoming),
+                ("No date", undated), ("Done", done)]
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            T3Header(title: "Todos", subtitle: "\(hub.todos.filter { !$0.done }.count) open", openDrawer: openDrawer) { EmptyView() }
+        let today = day(Date())
+        let groups = groups(today: today)
+        let openCount = groups.dropLast().reduce(0) { $0 + $1.1.count }
+        return VStack(spacing: 0) {
+            T3Header(title: "Todos", subtitle: "\(openCount) open", openDrawer: openDrawer) { EmptyView() }
             quickAdd
+            if addError {
+                Text("Couldn’t add the todo. Try again.")
+                    .t3Text(.sm, color: T3.dangerForeground)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
             List {
-                ForEach(groups, id: \.0) { name, items in
+                ForEach(groups.filter { !$0.1.isEmpty }, id: \.0) { name, items in
                     Section {
                         ForEach(items) { todo in
                             TodoRow(todo: todo, today: today) {
@@ -47,7 +63,7 @@ struct TodosView: View {
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) { Task { await hub.deleteTodo(todo.id) } } label: { Label("Delete", systemImage: "trash") }
                                 if !todo.done {
-                                    Button { Task { await hub.updateTodo(todo.id, ["due": day(Date().addingTimeInterval(86400))]) } } label: {
+                                    Button { Task { await hub.updateTodo(todo.id, ["due": day(tomorrow)]) } } label: {
                                         Label("Tomorrow", systemImage: "arrow.turn.up.right")
                                     }
                                     .tint(T3.primary)
@@ -73,6 +89,7 @@ struct TodosView: View {
             .environment(\.defaultMinListRowHeight, 40)
             .environment(\.defaultMinListHeaderHeight, 24)
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .refreshable { await hub.refreshTodos() }
         }
         .background(T3.screen.ignoresSafeArea())
@@ -89,7 +106,7 @@ struct TodosView: View {
                 .onSubmit(add)
             Menu {
                 Button("Today") { newDue = Date() }
-                Button("Tomorrow") { newDue = Date().addingTimeInterval(86400) }
+                Button("Tomorrow") { newDue = tomorrow }
                 Button("Pick a date…") { pickingDate = true }
                 if newDue != nil { Button("No date", role: .destructive) { newDue = nil } }
             } label: {
@@ -98,20 +115,44 @@ struct TodosView: View {
                     .padding(.horizontal, 10).frame(height: 28)
                     .background(Capsule().fill(T3.subtle)).overlay(Capsule().stroke(T3.border, lineWidth: 1))
             }
+            Button(action: add) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 23))
+                    .foregroundStyle(canAdd ? T3.primaryText : T3.iconMuted)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canAdd)
+            .accessibilityLabel("Add todo")
         }
+        .disabled(isAdding)
         .padding(.horizontal, 12).frame(height: 44)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(T3.input))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(T3.inputBorder, lineWidth: 1))
         .padding(.horizontal, 16).padding(.bottom, 8)
     }
 
+    private var tomorrow: Date { Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date() }
+    private var trimmedTitle: String { newTitle.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canAdd: Bool { !isAdding && !trimmedTitle.isEmpty }
+
     private func add() {
-        let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
+        guard canAdd else { return }
+        let title = trimmedTitle
         let due = newDue.map(day)
-        newTitle = ""; newDue = nil
-        Task { try? await hub.addTodo(title, due: due) }
-        adding = true
+        isAdding = true
+        addError = false
+        Task {
+            defer { isAdding = false }
+            do {
+                try await hub.addTodo(title, due: due)
+                newTitle = ""
+                newDue = nil
+            } catch {
+                addError = true
+            }
+        }
     }
 }
 

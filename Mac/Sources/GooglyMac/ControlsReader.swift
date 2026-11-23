@@ -111,7 +111,7 @@ enum ControlsReader {
         return CGRect(origin: position, size: size)
     }
 
-    private static func attribute<T>(_ element: AXUIElement, _ name: String) -> T? {
+    static func attribute<T>(_ element: AXUIElement, _ name: String) -> T? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success, let value else { return nil }
         if T.self == AXUIElement.self {

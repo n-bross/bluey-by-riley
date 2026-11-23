@@ -21,30 +21,34 @@ struct TodosTab: View {
 
     private var todos: [TodoItem] {
         let calendar = Calendar.current
-        return model.snapshot.visibleTodos.filter { todo in
-            guard ui.matches(todo.title, todo.notes) else { return false }
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
+        return model.snapshot.todos.filter { todo in
+            guard !todo.deleted, ui.matches(todo.title, todo.notes) else { return false }
             switch filter {
             case .all: return true
-            case .today: return todo.due.map { calendar.isDateInToday($0) || $0 < calendar.startOfDay(for: Date()) } ?? false
+            case .today: return todo.due.map { $0 < tomorrow } ?? false
             case .important: return todo.important
             }
         }
     }
 
-    private var open: [TodoItem] {
+    private func openTodos(in todos: [TodoItem]) -> [TodoItem] {
         todos.filter { !$0.done }.sorted {
             ($0.important ? 0 : 1, $0.due ?? .distantFuture, $0.createdAt) < ($1.important ? 0 : 1, $1.due ?? .distantFuture, $1.createdAt)
         }
     }
-    private var done: [TodoItem] { todos.filter(\.done).sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) } }
-
     var body: some View {
-        VStack(spacing: 0) {
+        let todos = todos
+        let open = openTodos(in: todos)
+        let done = todos.filter(\.done)
+        return VStack(spacing: 0) {
             TabHeader(ui: ui, model: model, tab: .todos, connectionName: info.connectionName, onSettings: info.onSettings) {
-                HStack(spacing: 8) {
-                    ForEach(Filter.allCases) { f in
-                        FilterChip(title: f.rawValue, selected: filter == f,
-                                   icon: f == .today ? "sun.max" : f == .important ? "star" : nil) { filter = f }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Filter.allCases) { f in
+                            FilterChip(title: f.rawValue, selected: filter == f,
+                                       icon: f == .today ? "sun.max" : f == .important ? "star" : nil) { filter = f }
+                        }
                     }
                 }
             }
@@ -63,7 +67,11 @@ struct TodosTab: View {
                     ForEach(open) { todo in row(todo) }
                     if !done.isEmpty {
                         Section {
-                            if showDone { ForEach(done) { todo in row(todo) } }
+                            if showDone {
+                                ForEach(done.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }) { todo in
+                                    row(todo)
+                                }
+                            }
                         } header: {
                             Button { withAnimation { showDone.toggle() } } label: {
                                 HStack {
@@ -97,16 +105,32 @@ struct TodosTab: View {
                 .font(.plexSans(15))
                 .focused($addFocused)
                 .onSubmit(add)
-            if !newTitle.isEmpty {
-                Button("Hinzufügen", action: add).font(.plexSans(13).weight(.semibold)).buttonStyle(.plain).foregroundStyle(Theme.accentLight)
+            Button("Hinzufügen", action: add)
+                .font(.plexSans(13).weight(.semibold))
+                .buttonStyle(.plain)
+                .foregroundStyle(canAdd ? Theme.accentLight : Theme.soft)
+                .disabled(!canAdd)
+            #if os(iOS)
+            if addFocused {
+                Button { addFocused = false } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Tastatur schließen")
             }
+            #endif
         }
         .padding(.horizontal, 14)
         .frame(height: 46)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
     }
 
+    private var canAdd: Bool { !newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
     private func add() {
+        guard canAdd else { return }
         let due: Date? = filter == .today ? Date() : nil
         model.addTodo(newTitle, important: filter == .important, due: due)
         newTitle = ""
@@ -231,7 +255,9 @@ private struct TodoEditor: View {
                 }
             }
         }
+        #if os(macOS)
         .frame(minWidth: 380, minHeight: 420)
+        #endif
         .onAppear { hasDue = todo.due != nil }
     }
 }

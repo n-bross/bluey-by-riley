@@ -108,9 +108,8 @@ struct HubRootView: View {
 
             Rectangle().fill(T3.drawerBorder).frame(height: 1).padding(.vertical, 12)
 
-            drawerRow("Bluey (face)", "face.smiling") {
+            drawerRow("Back to Bluey", "arrow.uturn.backward") {
                 drawer = false
-                OrientationLock.set(.landscape)
                 openBluey()
             }
             drawerRow("Settings", "gearshape") { drawer = false; settings = true }

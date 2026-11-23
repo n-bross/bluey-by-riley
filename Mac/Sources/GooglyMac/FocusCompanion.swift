@@ -45,6 +45,7 @@ final class FocusCompanion {
     private let prepareNudge: (ScreenSnapshot, String) async throws -> FocusAPI.Nudge
     private let screenUnlocked: () -> Bool
     private let showsCountdown: Bool
+    private let steering: FocusSteering?
 
     init(now: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime },
          permission: @escaping () -> Bool = { CGPreflightScreenCaptureAccess() },
@@ -53,14 +54,15 @@ final class FocusCompanion {
             let session = CGSessionCopyCurrentDictionary() as? [String: Any]
             return session?["CGSSessionScreenIsLocked"] as? Bool != true && session?["kCGSessionOnConsoleKey"] as? Bool != false
          },
-         capture: @escaping () async throws -> ScreenSnapshot = { try await ScreenReader.snapshot() },
+         capture: @escaping () async throws -> ScreenSnapshot = { try await ScreenReader.snapshot(preferForegroundDisplay: true) },
          classify: @escaping (ScreenSnapshot, FocusSession, Double) async throws -> FocusDecision = { try await FocusAPI.classify($0, session: $1, idle: $2) },
          prepareNudge: @escaping (ScreenSnapshot, String) async throws -> FocusAPI.Nudge = { try await FocusAPI.nudge($0, task: $1) },
-         showsCountdown: Bool = true,
+         showsCountdown: Bool = true, steering: FocusSteering? = nil,
          historyFile: URL? = nil, settings: UserDefaults? = .standard) {
         self.now = now; self.permission = permission; self.hasKey = hasKey
         self.capture = capture; self.classify = classify; self.screenUnlocked = screenUnlocked
         self.prepareNudge = prepareNudge
+        self.steering = steering
         self.showsCountdown = showsCountdown; self.lastTick = now()
         self.settings = settings; self.developerMode = settings?.bool(forKey: "focusDeveloperMode") ?? false
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Googly")
@@ -102,13 +104,13 @@ final class FocusCompanion {
         developerMode = enabled; settings?.set(enabled, forKey: "focusDeveloperMode")
         if hasSession {
             current?.setDeveloperMode(enabled)
-            current?.detail = enabled ? "Developer Mode: clock 4×, next check in 10 seconds" : "Normal speed. Next check in 30 seconds"
+            current?.detail = enabled ? "Developer Mode: clock 4×, next check in 10 seconds" : "Normal speed. Next check in 15 seconds"
         }
-        policy = FocusNudgePolicy(maximumGap: (current?.observationDuration ?? (enabled ? 40 : 30)) * 1.5,
+        policy = FocusNudgePolicy(maximumGap: (current?.observationDuration ?? (enabled ? 40 : 15)) * 1.5,
                                   developerMode: enabled)
         lastTick = now(); lastCheck = current?.elapsed ?? 0
         if current?.status == .ended { finish(timeUp: true) } else { publish(); persist() }
-        return enabled ? "Developer Mode on: clock 4×, checks every 10 seconds." : "Developer Mode off: normal clock, checks every 30 seconds."
+        return enabled ? "Developer Mode on: clock 4×, checks every 10 seconds." : "Developer Mode off: normal clock, checks every 15 seconds."
     }
 
     /// The default focus length: the Pomodoro round when Pomodoro is on, otherwise 30 minutes.
@@ -126,6 +128,7 @@ final class FocusCompanion {
         cancel()
         let skipped = rest != nil
         rest = nil; lastBreakTick = nil; lastTask = task
+        steering?.reset()
         current = FocusSession(task: task, duration: min(240, max(1, minutes)) * 60, developerMode: developerMode)
         policy = FocusNudgePolicy(maximumGap: current!.observationDuration * 1.5, developerMode: developerMode)
         lastTick = now(); lastCheck = 0
@@ -180,6 +183,7 @@ final class FocusCompanion {
         if current?.status == .ended { finish(timeUp: true); return }
         publish()
         if let current { onActivity?(current) }
+        steering?.enforce()
         if let session = current, session.elapsed - lastCheck >= session.observationDuration, work == nil {
             lastCheck = session.elapsed
             check(session: session)
@@ -193,6 +197,7 @@ final class FocusCompanion {
             defer { if self.generation == token { self.work = nil } }
             do {
                 guard self.allowed else { return }
+                let context = self.steering?.frontContext()
                 let screen = try await self.capture()
                 guard self.allowed, self.generation == token, !Task.isCancelled else { return }
                 let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: UInt32.max) ?? .null)
@@ -208,6 +213,9 @@ final class FocusCompanion {
                                        distraction: activity == .offTask ? answer.distraction : nil,
                                        distractionApp: activity == .offTask ? app.flatMap { $0.isEmpty ? nil : $0 } : nil)
                 let shouldNudge = self.policy.observe(check, age: age)
+                if check.activity == .onTask, let context {
+                    self.steering?.remember(context)
+                }
                 self.current?.detail = age > 20 ? "Last check was stale; skipped" : answer.activity == .uncertain ? "Not enough context to judge" : answer.activity == .onTask ? "On task" : "Off task · checking again before nudging"
                 self.current?.checks.append(check)
                 self.publish(); self.persist()
@@ -223,10 +231,10 @@ final class FocusCompanion {
                         let capturedAt = now()
                         let app = NSWorkspace.shared.frontmostApplication?.processIdentifier
                         nudge = try await self.prepareNudge(fresh, session.task)
-                        if let candidate = nudge.target, now() - capturedAt < 15,
+                        if fresh.isOnMainDisplay, let candidate = nudge.target, now() - capturedAt < 15,
                            app == NSWorkspace.shared.frontmostApplication?.processIdentifier {
                             // Re-read locally to reject a stale target after a tab, scroll or layout change.
-                            if let verify = try? await self.capture() {
+                            if let verify = try? await self.capture(), verify.isOnMainDisplay {
                                 target = verify.lines.map(\.line).first { $0.text == candidate.text &&
                                     abs($0.rect.midX - candidate.rect.midX) < 10 && abs($0.rect.midY - candidate.rect.midY) < 10 }
                             }
@@ -237,6 +245,7 @@ final class FocusCompanion {
                     }
                     guard self.allowed, self.generation == token, !Task.isCancelled else { return }
                     self.onNudge?(nudge.message, target)
+                    if answer.probability >= 0.8, let context { self.steering?.interrupt(context) }
                     self.current?.detail = "Off task · Bluey nudged you"
                     check.nudged = true
                     if let index = self.current?.checks.firstIndex(where: { $0.id == check.id }) { self.current?.checks[index] = check }
@@ -256,7 +265,7 @@ final class FocusCompanion {
     }
     /// `timeUp`: the timer ran out (a finished Pomodoro round), rather than you ending it early.
     private func finish(timeUp: Bool) {
-        cancel(); policy.reset()
+        cancel(); policy.reset(); steering?.reset()
         if let current {
             history.removeAll { $0.id == current.id }; history.insert(current, at: 0)
             history = Array(history.prefix(30))

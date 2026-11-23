@@ -3,6 +3,14 @@ import GooglyShared
 @testable import GooglyMac
 
 final class FocusLifecycleTests: XCTestCase {
+    @MainActor func testBrowserBlockingUsesRealHTTPHostsAndRecognizesYouTubeAliases() {
+        XCTAssertEqual(FocusSteering.siteHost(URL(string: "https://www.example.org/video")), "example.org")
+        XCTAssertEqual(FocusSteering.siteHost(URL(string: "https://m.youtube.com/watch?v=example")), "youtube.com")
+        XCTAssertEqual(FocusSteering.siteHost(URL(string: "https://youtu.be/example")), "youtube.com")
+        XCTAssertEqual(FocusSteering.siteHost(URL(string: "https://youtube.com.example.org/")), "youtube.com.example.org")
+        XCTAssertNil(FocusSteering.siteHost(URL(string: "file:///tmp/youtube.com")))
+    }
+
     @MainActor func testRepeatedOffTaskChecksActuallyDeliverANudgeIncludingFailures() async throws {
         let answer = try FocusDecision.decode(Data(#"{"answers":[{"name":"visible_activity","type":"choice","choice":"social_feed"},{"name":"activity","type":"choice","choice":"off_task","confidence":0.2,"probabilities":[{"value":"on_task","probability":0.005},{"value":"off_task","probability":0.99},{"value":"uncertain","probability":0.005}]}]}"#.utf8))
         for failure in ["none", "capture", "wording"] {
@@ -81,10 +89,10 @@ final class FocusLifecycleTests: XCTestCase {
         _ = app.pause(); time += 2; app.heartbeat(); app.tick()
         XCTAssertEqual(app.current?.elapsed, 40)
         app.setDeveloperMode(false); _ = app.resume()
-        for _ in 1...29 { time += 1; app.heartbeat(); app.tick() }
-        XCTAssertEqual(captures, 1); XCTAssertEqual(app.current?.elapsed, 69)
+        for _ in 1...14 { time += 1; app.heartbeat(); app.tick() }
+        XCTAssertEqual(captures, 1); XCTAssertEqual(app.current?.elapsed, 54)
         time += 1; app.heartbeat(); app.tick(); await Task.yield()
-        XCTAssertEqual(captures, 2); XCTAssertEqual(app.current?.elapsed, 70)
+        XCTAssertEqual(captures, 2); XCTAssertEqual(app.current?.elapsed, 55)
         _ = app.end()
     }
     @MainActor func testDeveloperSettingPersistsAndSwitchCancelsAnOldCapture() async {
@@ -144,7 +152,7 @@ final class FocusLifecycleTests: XCTestCase {
             }, classify: { _, _, _ in XCTFail("Cancelled capture must not reach the API"); throw CancellationError() },
             showsCountdown: false, historyFile: URL(fileURLWithPath: "/tmp/bluey-focus-test-cancel.json"), settings: nil)
         app.heartbeat(); _ = app.start(task: "Write")
-        for _ in 1...29 { time += 1; app.heartbeat(); app.tick() }
+        for _ in 1...14 { time += 1; app.heartbeat(); app.tick() }
         XCTAssertEqual(captures, 0)
         time += 1; app.heartbeat(); app.tick()
         await Task.yield(); XCTAssertEqual(captures, 1)
