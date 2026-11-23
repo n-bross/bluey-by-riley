@@ -14,6 +14,12 @@ The task appears at the phone's top left, with a large white countdown at bottom
 
 **Developer Mode:** turn it on at the top of **Focus** on the phone or in Bluey's Mac menu. The countdown runs **4× faster**, and the Mac checks the screen every **10 real seconds**. Repeated majority off-task choices nudge after two or three checks (about **20–30 real seconds**, plus request time); cooldown is 30 real seconds. **Test a nudge** checks the Mac bubble and phone chirp immediately without taking a screenshot. Changes take effect immediately on both devices, including during a session. Test sessions are labelled in history with their real active time, and the setting is remembered on the Mac. A fresh installation defaults to normal speed. Turning it off restores the real-time clock, 30-second checks and two-to-four-minute evidence span. Pause, lock and disconnect still stop capture normally.
 
+## Call notes on Mac
+
+On macOS 15 or later, choose **Call-Notizen …** in the Bluey menu. Allow screen and system audio recording and microphone access when macOS asks. Once the participants are informed, select **Aufnahme starten**. Bluey records Mac audio and microphone on separate tracks and sends audio chunks to OpenAI for transcription using your configured API key.
+
+Type a question during or after the call in **Private Rückfragen**. Bluey uses the transcript and can suggest a sentence to ask the other participants. Stop the recording when the call ends. You can reopen the call from the same window or open the audio and notes in Finder under `~/Documents/Bluey Notes`.
+
 ## The Bluey app: chat, todos, notes, pomodoro, stats
 
 The same app runs on iPhone, Mac and in the browser. Tabs: **Chat**, **Todos**, **Notizen**, **Pomodoro**, **Statistik**, and **Gesicht** (his face).
