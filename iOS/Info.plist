@@ -20,6 +20,11 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_googly._tcp</string>
@@ -36,6 +41,9 @@
 		<string>IBMPlexSans.ttf</string>
 		<string>IBMPlexMono-Regular.ttf</string>
 		<string>IBMPlexMono-Medium.ttf</string>
+		<string>DMSans-Regular.ttf</string>
+		<string>DMSans-Medium.ttf</string>
+		<string>DMSans-Bold.ttf</string>
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
@@ -49,6 +57,7 @@
 	<array>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 </dict>
 </plist>

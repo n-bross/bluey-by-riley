@@ -3,6 +3,8 @@ import SwiftUI
 /// Shown until the phone finds the Mac: a sleepy blob and how to wake him up.
 struct PairingView: View {
     var onPlay: () -> Void
+    /// Chats, todos and notes work without the Mac (through the hub).
+    var openHub: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 56) {
@@ -31,6 +33,15 @@ struct PairingView: View {
                         .padding(.horizontal, 18)
                         .frame(minHeight: 44)
                         .background(Color(hex: Palette.panel), in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+                Button(action: openHub) {
+                    Text("Use without Mac: Chats, Todos & Notes")
+                        .font(.plexSans(15).weight(.semibold))
+                        .foregroundStyle(Color(hex: 0xF4F1FA))
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
+                        .background(Color(hex: 0x346BF1), in: RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
             }

@@ -35,6 +35,9 @@ final class FocusClient: ObservableObject {
     @Published private(set) var fresh = false
     @Published private(set) var developerMode = false
     @Published private(set) var nudgeText = ""
+    @Published private(set) var pomodoro = PomodoroSettings()
+    @Published private(set) var rest: PomodoroBreak?
+    @Published private(set) var completedRounds = 0
     private var nudgeCount = 0
     private var lastNudgedAt: Date?
     @Published var message = ""
@@ -71,6 +74,9 @@ final class FocusClient: ObservableObject {
         if current?.id != state.current?.id { nudgeText = "" }
         current = state.current; history = state.history
         developerMode = state.developerMode ?? false
+        if let p = state.pomodoro { pomodoro = p }
+        rest = state.rest
+        completedRounds = state.completedRounds ?? 0
         if let data = try? JSONEncoder().encode(history) { try? data.write(to: file, options: .atomic) }
         writeStatus()
         if finished { onFinished?() }
@@ -93,9 +99,18 @@ final class FocusClient: ObservableObject {
         let target = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("bluey-status.json")
         if let data = try? JSONSerialization.data(withJSONObject: status) { try? data.write(to: target, options: .atomic) }
     }
-    func command(_ command: String, task: String? = nil, minutes: Double = 30, developerMode: Bool? = nil) {
+    func setPomodoro(_ settings: PomodoroSettings) {
+        pomodoro = settings  // feels instant; the Mac's answer confirms it
+        guard let json = (try? JSONEncoder().encode(settings)).flatMap({ String(data: $0, encoding: .utf8) }) else { return }
+        command("focusPomodoro", extra: ["pomodoro": json])
+    }
+
+    func command(_ command: String, task: String? = nil, minutes: Double? = nil, developerMode: Bool? = nil,
+                 extra: [String: Any] = [:]) {
         guard let link, link.connected else { message = "Connect your paired Mac first."; return }
-        var args: [String: Any] = ["task": task ?? "", "minutes": minutes]
+        var args: [String: Any] = ["task": task ?? ""]
+        if let minutes { args["minutes"] = minutes }
+        args.merge(extra) { $1 }
         if let developerMode { args["developerMode"] = developerMode }
         let data = try? JSONSerialization.data(withJSONObject: args)
         link.request(Packet(command: command, text: data.flatMap { String(data: $0, encoding: .utf8) })) { [weak self] reply in

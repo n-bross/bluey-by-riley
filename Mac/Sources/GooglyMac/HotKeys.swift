@@ -12,8 +12,9 @@ final class HotKeys {
     private var installed = false
 
     /// Registers `modifiers` + `key` (a kVK_ constant). Defaults to ⌃⌥.
+    @discardableResult
     func register(keyCode: Int, modifiers: Int = controlKey | optionKey,
-                  onRelease: (() -> Void)? = nil, onPress: @escaping () -> Void) {
+                  onRelease: (() -> Void)? = nil, onPress: @escaping () -> Void) -> Bool {
         installHandlerIfNeeded()
         let id = nextID
         nextID += 1
@@ -22,7 +23,17 @@ final class HotKeys {
         var ref: EventHotKeyRef?
         let hotKeyID = EventHotKeyID(signature: OSType(0x474F4F47), id: id)  // 'GOOG'
         let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotKeyID, GetApplicationEventTarget(), 0, &ref)
-        if status == noErr, let ref { refs.append(ref) } else { NSLog("Googly: hotkey \(keyCode) not registered (\(status))") }
+        if status == noErr, let ref { refs.append(ref); return true }
+        NSLog("Googly: hotkey \(keyCode) not registered (\(status))")
+        return false
+    }
+
+    /// Drops every shortcut (before registering a new set, or while one is being recorded).
+    func unregisterAll() {
+        for ref in refs { UnregisterEventHotKey(ref) }
+        refs = []
+        pressActions = [:]
+        releaseActions = [:]
     }
 
     fileprivate func fire(_ id: UInt32, pressed: Bool) {
