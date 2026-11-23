@@ -35,7 +35,7 @@ final class FocusClient: ObservableObject {
     @Published private(set) var fresh = false
     @Published private(set) var developerMode = false
     @Published private(set) var nudgeText = ""
-    @Published private(set) var pomodoro = PomodoroSettings()
+    @Published private(set) var pomodoro = PomodoroRhythm()
     @Published private(set) var rest: PomodoroBreak?
     @Published private(set) var completedRounds = 0
     private var nudgeCount = 0
@@ -99,7 +99,7 @@ final class FocusClient: ObservableObject {
         let target = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("bluey-status.json")
         if let data = try? JSONSerialization.data(withJSONObject: status) { try? data.write(to: target, options: .atomic) }
     }
-    func setPomodoro(_ settings: PomodoroSettings) {
+    func setPomodoro(_ settings: PomodoroRhythm) {
         pomodoro = settings  // feels instant; the Mac's answer confirms it
         guard let json = (try? JSONEncoder().encode(settings)).flatMap({ String(data: $0, encoding: .utf8) }) else { return }
         command("focusPomodoro", extra: ["pomodoro": json])

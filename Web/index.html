@@ -1,0 +1,1330 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bluey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --berry1: #A9BCFF; --berry2: #6C86F5; --berry3: #4254D6; --berry4: #2B2F8F;
+  --ink: #17151F; --soft: #B9B2CC; --panel: #1E1B29; --panel2: #262235;
+  --line: rgba(255,255,255,0.08); --bg: #000; --text: #F4F2FA;
+  --good: #5BE49B; --warn: #FFB27A; --bad: #E5547A;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+body { font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 15px; overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.display { font-family: "Fredoka", ui-rounded, system-ui, sans-serif; font-weight: 700; }
+.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.muted { color: var(--soft); }
+.label { font-family: "IBM Plex Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+
+#app { display: flex; height: 100vh; height: 100dvh; }
+#sidebar { width: 220px; flex: none; background: rgba(30,27,41,.7); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 18px 12px; gap: 6px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 14px; }
+.brand .name { font-size: 26px; }
+.status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--soft); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(185,178,204,.5); flex: none; }
+.dot.on { background: var(--good); }
+.nav { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; padding: 10px 12px; border-radius: 12px; color: var(--soft); text-align: left; font-weight: 500; }
+.nav:hover { background: rgba(255,255,255,.04); color: var(--text); }
+.nav.active { background: rgba(108,134,245,.18); color: var(--text); }
+.nav svg { width: 20px; height: 20px; flex: none; }
+.nav .t { font-size: 15px; }
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.section { display: none; flex: 1; min-height: 0; }
+.section.active { display: flex; }
+
+.btn { border: 0; border-radius: 12px; padding: 9px 14px; background: rgba(255,255,255,.08); color: var(--text); font-weight: 500; }
+.btn:hover { background: rgba(255,255,255,.12); }
+.btn.primary { background: linear-gradient(135deg, var(--berry2), var(--berry3)); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { background: rgba(229,84,122,.85); }
+.btn:disabled { opacity: .45; cursor: default; }
+.icon-btn { border: 0; background: none; color: var(--soft); width: 32px; height: 32px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; }
+.icon-btn:hover { background: rgba(255,255,255,.07); color: var(--text); }
+.icon-btn svg { width: 18px; height: 18px; }
+.input, textarea.input, select.input { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 11px; padding: 9px 12px; outline: none; }
+.input:focus { border-color: rgba(169,188,255,.5); }
+select.input option { background: var(--panel); }
+.chip { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 5px 12px; color: var(--soft); font-size: 13px; }
+.chip.on { background: rgba(108,134,245,.22); color: var(--text); border-color: transparent; }
+.page { flex: 1; overflow-y: auto; padding: 28px 32px 40px; }
+.page-inner { max-width: 820px; margin: 0 auto; }
+h1.title { font-family: "Fredoka", sans-serif; font-weight: 700; font-size: 30px; margin: 0 0 18px; display: flex; align-items: center; gap: 12px; }
+.empty { text-align: center; padding: 50px 20px; color: var(--soft); }
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 12px; z-index: 50; max-width: 90vw; font-size: 14px; }
+
+/* Chat */
+#threads { width: 260px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; background: rgba(30,27,41,.35); }
+#threads .head { padding: 16px 14px 10px; display: flex; gap: 8px; }
+#threadList { flex: 1; overflow-y: auto; padding: 4px 8px 16px; }
+.thread { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-radius: 10px; color: var(--soft); cursor: pointer; }
+.thread:hover { background: rgba(255,255,255,.04); }
+.thread.active { background: rgba(108,134,245,.16); color: var(--text); }
+.thread .tt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.thread .icon-btn { width: 26px; height: 26px; opacity: 0; }
+.thread:hover .icon-btn { opacity: 1; }
+#chatPane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#chatHeader { padding: 12px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; min-height: 56px; }
+#chatHeader .ct { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#messages { flex: 1; overflow-y: auto; padding: 24px 20px; }
+.msgs-inner { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.msg { display: flex; gap: 10px; }
+.msg.user { justify-content: flex-end; }
+.msg .bubble { max-width: 82%; line-height: 1.55; overflow-wrap: anywhere; }
+.msg.user .bubble { background: rgba(108,134,245,.22); padding: 10px 14px; border-radius: 16px 16px 4px 16px; white-space: pre-wrap; }
+.msg.assistant .bubble { padding-top: 4px; }
+.msg .avatar { width: 34px; height: 30px; flex: none; margin-top: 2px; }
+.msg .meta { font-size: 11px; color: var(--soft); margin-top: 6px; font-family: "IBM Plex Mono", monospace; }
+.msg .err { color: var(--bad); font-size: 13px; margin-top: 6px; }
+.bubble p { margin: 0 0 .7em; }
+.bubble p:last-child { margin-bottom: 0; }
+.bubble ul, .bubble ol { margin: 0 0 .7em; padding-left: 1.4em; }
+.bubble pre { background: #0d0c13; border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; font-size: 13px; }
+.bubble code { font-family: "IBM Plex Mono", monospace; font-size: .9em; background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 5px; }
+.bubble pre code { background: none; padding: 0; }
+.bubble a { color: var(--berry1); }
+.bubble h3, .bubble h4 { margin: .4em 0 .4em; font-size: 1.05em; }
+.atts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; justify-content: flex-end; }
+.att { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 13px; color: var(--text); text-decoration: none; max-width: 240px; }
+.att img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
+.att.big img { width: 160px; height: auto; max-height: 160px; }
+.att .an { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.typing span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--soft); margin-right: 4px; animation: blink 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+#composerWrap { padding: 10px 20px 18px; }
+#composer { max-width: 780px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 10px 12px; }
+#composer.drag { border-color: var(--berry2); background: #23203a; }
+#composer textarea { width: 100%; border: 0; background: none; resize: none; outline: none; min-height: 26px; max-height: 220px; line-height: 1.5; padding: 4px 4px; }
+#pending { display: flex; flex-wrap: wrap; gap: 6px; }
+#pending:not(:empty) { margin-bottom: 8px; }
+.pchip { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.07); border-radius: 9px; padding: 4px 6px 4px 8px; font-size: 12px; max-width: 220px; }
+.pchip img { width: 26px; height: 26px; object-fit: cover; border-radius: 5px; }
+.pchip .an { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pchip button { border: 0; background: none; color: var(--soft); padding: 0 2px; }
+.ctools { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.ctools .grow { flex: 1; }
+.ctools select { max-width: 200px; padding: 6px 10px; font-size: 13px; }
+.toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--soft); cursor: pointer; user-select: none; border-radius: 9px; padding: 5px 9px; border: 1px solid var(--line); }
+.toggle.on { color: var(--text); background: rgba(108,134,245,.2); border-color: transparent; }
+.send { width: 36px; height: 36px; border-radius: 11px; border: 0; background: linear-gradient(135deg, var(--berry2), var(--berry3)); display: inline-flex; align-items: center; justify-content: center; color: #fff; }
+.send:disabled { opacity: .4; }
+.send.stop { background: var(--bad); }
+.chat-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--soft); text-align: center; padding: 30px; }
+
+/* Todos */
+.add-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.add-row .input { flex: 1; }
+.filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.todo { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.03); margin-bottom: 6px; }
+.todo:hover { background: rgba(255,255,255,.05); }
+.check { width: 22px; height: 22px; flex: none; border-radius: 7px; border: 2px solid var(--berry2); background: none; margin-top: 1px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.check.on { background: var(--berry2); }
+.check svg { width: 14px; height: 14px; color: #fff; }
+.todo .body { flex: 1; min-width: 0; }
+.todo .tt { width: 100%; background: none; border: 0; outline: none; padding: 1px 0; font-size: 15px; }
+.todo.done .tt { text-decoration: line-through; color: var(--soft); }
+.todo .extra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--soft); }
+.todo .extra input { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; font-size: 12px; color-scheme: dark; }
+.todo .extra input[type=number] { width: 62px; }
+.real { color: var(--berry1); font-family: "IBM Plex Mono", monospace; }
+.overdue { color: var(--warn); }
+.star { color: var(--soft); }
+.star.on { color: #FFD66B; }
+details.donebox summary { cursor: pointer; color: var(--soft); margin: 18px 0 8px; list-style: none; }
+details.donebox summary::-webkit-details-marker { display: none; }
+
+/* Notes */
+#notesList { width: 280px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; background: rgba(30,27,41,.35); }
+#notesList .head { padding: 16px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
+#noteItems { flex: 1; overflow-y: auto; padding: 4px 8px 16px; }
+.note-item { padding: 10px 12px; border-radius: 10px; cursor: pointer; margin-bottom: 2px; }
+.note-item:hover { background: rgba(255,255,255,.04); }
+.note-item.active { background: rgba(108,134,245,.16); }
+.note-item .nt { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-item .np { font-size: 12px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+#noteEditor { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px; gap: 10px; }
+#noteEditor .bar { display: flex; align-items: center; gap: 8px; }
+#noteTitle { flex: 1; font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 26px; background: none; border: 0; outline: none; }
+#noteBody { flex: 1; background: none; border: 0; outline: none; resize: none; line-height: 1.6; font-size: 15px; }
+
+/* Pomodoro */
+.pomo { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.ring-wrap { position: relative; width: min(320px, 78vw); aspect-ratio: 1; }
+.ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.ring-center .time { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: clamp(48px, 13vw, 72px); font-variant-numeric: tabular-nums; }
+.pomo-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center; }
+.card { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.settings-grid label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--soft); }
+.settings-grid input { width: 100%; }
+.switch { display: flex; align-items: center; gap: 10px; cursor: pointer; margin-top: 14px; font-size: 14px; }
+.switch input { width: 18px; height: 18px; accent-color: var(--berry2); }
+.log-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.log-item:last-child { border-bottom: 0; }
+
+/* Stats */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.tile { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.tile .v { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 32px; margin-top: 4px; }
+.tile .s { font-size: 12px; color: var(--soft); margin-top: 2px; }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--soft); margin-bottom: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+#chart svg { width: 100%; height: auto; display: block; }
+
+/* Face */
+#face { position: relative; background: #000; }
+#faceCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.face-hud { position: absolute; left: 16px; right: 16px; top: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
+.face-hud > * { pointer-events: auto; }
+.focus-card { background: rgba(30,27,41,.82); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; max-width: 360px; backdrop-filter: blur(8px); }
+.focus-card .task { font-weight: 600; margin: 4px 0; }
+.focus-card .clock { font-family: "Fredoka", sans-serif; font-size: 34px; font-variant-numeric: tabular-nums; }
+.focus-card .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.focus-card input { width: 100%; margin-top: 6px; }
+
+@media (max-width: 760px) {
+  #app { flex-direction: column-reverse; }
+  #sidebar { width: 100%; flex-direction: row; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--line); gap: 0; justify-content: space-around; }
+  .brand { display: none; }
+  .nav { flex-direction: column; gap: 3px; padding: 6px 2px; justify-content: center; text-align: center; border-radius: 10px; }
+  .nav .t { font-size: 10px; }
+  #threads, #notesList { width: 100%; border-right: 0; }
+  #chat.has-thread #threads, #chat:not(.has-thread) #chatPane.pane-hidden { display: none; }
+  #notes.has-note #notesList { display: none; }
+  #notes:not(.has-note) #noteEditor { display: none; }
+  .back-mobile { display: inline-flex !important; }
+  .page { padding: 20px 16px 30px; }
+  #noteEditor { padding: 14px 16px; }
+  #messages { padding: 16px 12px; }
+  #composerWrap { padding: 8px 10px 10px; }
+  .msg .bubble { max-width: 90%; }
+}
+.back-mobile { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <nav id="sidebar">
+    <div class="brand">
+      <span class="bluey-slot" data-size="48"></span>
+      <div>
+        <div class="name display">Bluey</div>
+        <div class="status"><span id="connDot" class="dot"></span><span id="connText">Verbinde…</span></div>
+      </div>
+    </div>
+  </nav>
+  <main id="main">
+    <!-- Chat -->
+    <section id="chat" class="section">
+      <aside id="threads">
+        <div class="head">
+          <button class="btn primary" id="newChat" style="flex:1">+ Neuer Chat</button>
+        </div>
+        <div id="threadList"></div>
+      </aside>
+      <div id="chatPane">
+        <header id="chatHeader">
+          <button class="icon-btn back-mobile" id="chatBack" aria-label="Zurück"></button>
+          <span class="bluey-slot" data-size="30" id="chatAvatar"></span>
+          <div class="ct" id="chatTitle">Neuer Chat</div>
+        </header>
+        <div id="messages"></div>
+        <div id="composerWrap">
+          <div id="composer">
+            <div id="pending"></div>
+            <textarea id="prompt" rows="1" placeholder="Frag Bluey etwas…"></textarea>
+            <div class="ctools">
+              <button class="icon-btn" id="attachBtn" title="Datei anhängen" aria-label="Datei anhängen"></button>
+              <input type="file" id="fileInput" multiple hidden>
+              <select class="input" id="modelSelect" aria-label="Modell"></select>
+              <span class="toggle" id="webToggle" role="switch" tabindex="0">Websuche</span>
+              <span class="grow"></span>
+              <button class="send" id="sendBtn" aria-label="Senden"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Todos -->
+    <section id="todos" class="section">
+      <div class="page"><div class="page-inner">
+        <h1 class="title">Todos</h1>
+        <form class="add-row" id="todoForm">
+          <input class="input" id="todoInput" placeholder="Was steht an?" autocomplete="off">
+          <button class="btn primary" type="submit">Hinzufügen</button>
+        </form>
+        <div class="filters" id="todoFilters"></div>
+        <div id="todoList"></div>
+      </div></div>
+    </section>
+
+    <!-- Notes -->
+    <section id="notes" class="section">
+      <aside id="notesList">
+        <div class="head">
+          <button class="btn primary" id="newNote">+ Neue Notiz</button>
+          <input class="input" id="noteSearch" placeholder="Suchen…">
+        </div>
+        <div id="noteItems"></div>
+      </aside>
+      <div id="noteEditor">
+        <div class="bar">
+          <button class="icon-btn back-mobile" id="noteBack" aria-label="Zurück"></button>
+          <input id="noteTitle" placeholder="Titel">
+          <button class="icon-btn" id="notePin" title="Anheften"></button>
+          <button class="icon-btn" id="noteDelete" title="Löschen"></button>
+        </div>
+        <div class="label" id="noteMeta"></div>
+        <textarea id="noteBody" placeholder="Schreib einfach los…"></textarea>
+      </div>
+    </section>
+
+    <!-- Pomodoro -->
+    <section id="pomodoro" class="section">
+      <div class="page"><div class="page-inner pomo" id="pomoRoot"></div></div>
+    </section>
+
+    <!-- Stats -->
+    <section id="stats" class="section">
+      <div class="page"><div class="page-inner">
+        <h1 class="title">Statistik</h1>
+        <div class="tiles" id="tiles"></div>
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Letzte 7 Tage</div>
+          <div class="legend"><span><i style="background:var(--berry2)"></i>Fokus-Minuten</span><span><i style="background:var(--good)"></i>Todos erledigt</span></div>
+          <div id="chart"></div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- Face -->
+    <section id="face" class="section">
+      <canvas id="faceCanvas"></canvas>
+      <div class="face-hud"><div class="focus-card" id="focusCard"></div></div>
+    </section>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+// ---------- Small helpers ----------
+const $ = (sel, root = document) => root.querySelector(sel);
+const el = (tag, attrs = {}, ...children) => {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") node.className = v;
+    else if (k === "html") node.innerHTML = v; // only used with trusted, pre-escaped markup
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) {
+    if (c == null || c === false) continue;
+    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return node;
+};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const newID = () => crypto.randomUUID().toUpperCase();
+const nowISO = () => new Date().toISOString();
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+function toast(text) {
+  const t = el("div", { class: "toast" }, text);
+  document.body.append(t);
+  setTimeout(() => t.remove(), 3800);
+}
+const clock = s => { const n = Math.max(0, Math.ceil(s)); return String(Math.floor(n / 60)).padStart(2, "0") + ":" + String(n % 60).padStart(2, "0"); };
+const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const fmtTime = d => new Date(d).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+const fmtDate = d => new Date(d).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+function fmtSize(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+
+// ---------- Icons (inline SVG, stroke = currentColor) ----------
+const ICON = {
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  todos: '<path d="M4 6h2M4 12h2M4 18h2M9 6h11M9 12h11M9 18h11"/>',
+  notes: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+  pomodoro: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>',
+  stats: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  face: '<circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1.2" fill="currentColor"/><circle cx="15" cy="10" r="1.2" fill="currentColor"/><path d="M8.5 15c2 2 5 2 7 0"/>',
+  clip: '<path d="M20 11l-8.5 8.5a5 5 0 01-7-7L13 4a3.3 3.3 0 014.7 4.7l-8.5 8.5a1.7 1.7 0 01-2.4-2.4L15 7"/>',
+  send: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  pin: '<path d="M9 4h6l-1 6 4 4H6l4-4zM12 14v6"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
+  star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  file: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/>',
+};
+const icon = (name, extra = "") => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ${extra}>${ICON[name]}</svg>`;
+
+// ---------- Mini Bluey (SVG) ----------
+let blueyCount = 0;
+function blueySVG(size = 40, look = { x: 0.15, y: 0.2 }) {
+  const id = "bg" + (blueyCount++);
+  const w = size, h = size * 0.88;
+  const px = look.x * 2.2, py = look.y * 2.2;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 100 88" aria-hidden="true">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A9BCFF"/><stop offset=".34" stop-color="#6C86F5"/><stop offset=".68" stop-color="#4254D6"/><stop offset="1" stop-color="#2B2F8F"/>
+    </linearGradient></defs>
+    <path fill="url(#${id})" d="M52 2C80 2 98 20 98 46C98 72 78 86 50 86C20 86 2 70 2 44C2 18 24 2 52 2Z"/>
+    <ellipse cx="34" cy="38" rx="13" ry="13.5" fill="#fff"/><ellipse cx="66" cy="38" rx="13" ry="13.5" fill="#fff"/>
+    <circle class="pupil" cx="${35 + px}" cy="${40 + py}" r="6" fill="#17151F"/><circle class="pupil" cx="${67 + px}" cy="${40 + py}" r="6" fill="#17151F"/>
+    <ellipse cx="30" cy="20" rx="14" ry="6" fill="#fff" opacity=".22"/>
+  </svg>`;
+}
+function blueyNode(size, look) { const s = el("span", { style: "display:inline-flex" }); s.innerHTML = blueySVG(size, look); return s; }
+
+// ---------- State ----------
+const S = {
+  snap: { todos: [], notes: [], threads: [], pomodoro: null, pomodoroLog: [], models: [], defaultModel: null },
+  stats: null,
+  focus: null,
+  focusAt: 0,
+  section: store.get("bluey.section", "chat"),
+  threadID: store.get("bluey.thread", "") || null,
+  noteID: null,
+  todoFilter: "all",
+  pending: [],      // uploaded attachments waiting to be sent
+  uploading: 0,
+  sending: false,
+  webSearch: store.get("bluey.web", "0") === "1",
+  face: { gazeX: 0, gazeY: 0, mood: "listening", talk: 0 },
+  faceAt: 0,
+  connected: false,
+};
+
+// ---------- API ----------
+async function api(path, opts = {}) {
+  const res = await fetch(path, { credentials: "same-origin", ...opts });
+  if (!res.ok) {
+    let msg = "HTTP " + res.status;
+    try { const j = await res.json(); if (j && (j.error || j.message)) msg = j.error || j.message; } catch {}
+    throw new Error(msg);
+  }
+  const type = res.headers.get("content-type") || "";
+  return type.includes("json") ? res.json() : res.text();
+}
+const postJSON = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+async function put(partial) {
+  // Apply locally first so the UI feels instant, then let the Mac merge.
+  applySnapshot(mergeLocal(S.snap, partial), false);
+  try { applySnapshot(await postJSON("/api/put", partial)); }
+  catch (e) { toast("Speichern fehlgeschlagen: " + e.message); }
+}
+
+function mergeLocal(base, partial) {
+  const out = { ...base };
+  for (const key of ["todos", "notes", "threads", "pomodoroLog"]) {
+    if (!partial[key]) continue;
+    const list = [...(base[key] || [])];
+    for (const item of partial[key]) {
+      const i = list.findIndex(x => x.id === item.id);
+      if (i < 0) list.push(item);
+      else if (new Date(item.updatedAt) >= new Date(list[i].updatedAt)) list[i] = item;
+    }
+    out[key] = list;
+  }
+  if (partial.pomodoro) out.pomodoro = partial.pomodoro;
+  return out;
+}
+
+function applySnapshot(snap, refreshStats = true) {
+  if (!snap || typeof snap !== "object") return;
+  S.snap = {
+    todos: snap.todos || [], notes: snap.notes || [], threads: snap.threads || [],
+    pomodoro: snap.pomodoro || null, pomodoroLog: snap.pomodoroLog || [],
+    models: (snap.models && snap.models.length) ? snap.models : S.snap.models,
+    defaultModel: snap.defaultModel || S.snap.defaultModel,
+  };
+  renderAll();
+  if (refreshStats) loadStatsSoon();
+}
+
+const loadStatsSoon = debounce(async () => {
+  try { S.stats = await api("/api/stats"); renderStats(); } catch {}
+}, 500);
+async function loadFocus() { try { setFocus(await api("/api/focus")); } catch {} }
+function setFocus(f) { S.focus = f; S.focusAt = performance.now(); renderFocusCard(); }
+
+// ---------- Live events ----------
+let events;
+function connectEvents() {
+  if (events) events.close();
+  events = new EventSource("/api/events");
+  events.onopen = () => { setConnected(true); };
+  events.onerror = () => { setConnected(false); };
+  events.addEventListener("state", e => { try { applySnapshot(JSON.parse(e.data)); } catch {} });
+  events.addEventListener("delta", e => { try { applyDelta(JSON.parse(e.data)); } catch {} });
+  events.addEventListener("face", e => { try { S.face = JSON.parse(e.data); S.faceAt = performance.now(); } catch {} });
+  events.addEventListener("focus", e => { try { setFocus(JSON.parse(e.data)); } catch {} });
+}
+function setConnected(on) {
+  if (S.connected === on) return;
+  S.connected = on;
+  $("#connDot").classList.toggle("on", on);
+  $("#connText").textContent = on ? "Mit dem Mac verbunden" : "Mac nicht erreichbar";
+  if (on) { refreshAll(); }
+}
+async function refreshAll() {
+  try { applySnapshot(await api("/api/state")); } catch (e) { /* events will retry */ }
+  loadFocus();
+}
+
+// ---------- Navigation ----------
+const SECTIONS = [
+  ["chat", "Chat"], ["todos", "Todos"], ["notes", "Notizen"],
+  ["pomodoro", "Pomodoro"], ["stats", "Statistik"], ["face", "Gesicht"],
+];
+function buildNav() {
+  const side = $("#sidebar");
+  for (const [id, title] of SECTIONS) {
+    side.append(el("button", { class: "nav", "data-s": id, onclick: () => show(id), html: icon(id) + `<span class="t">${esc(title)}</span>` }));
+  }
+}
+function show(id) {
+  if (!SECTIONS.some(s => s[0] === id)) id = "chat";
+  S.section = id; store.set("bluey.section", id);
+  document.querySelectorAll(".section").forEach(s => s.classList.toggle("active", s.id === id));
+  document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.s === id));
+  if (id === "stats") loadStatsSoon();
+  if (id === "face") { loadFocus(); startFace(); } else stopFace();
+  if (id === "chat") scrollMessages(true);
+}
+
+function renderAll() {
+  renderThreads(); renderMessages(); renderModels();
+  renderTodos(); renderNotesList(); renderNoteEditor(false);
+  renderPomodoro(true);
+}
+
+// =====================================================================
+// Chat
+// =====================================================================
+const visibleThreads = () => S.snap.threads.filter(t => !t.deleted).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+const currentThread = () => S.snap.threads.find(t => t.id === S.threadID && !t.deleted) || null;
+
+function selectThread(id) {
+  S.threadID = id; store.set("bluey.thread", id || "");
+  const t = currentThread();
+  if (t && t.webSearch != null) { S.webSearch = !!t.webSearch; }
+  $("#chat").classList.toggle("has-thread", !!id);
+  renderThreads(); renderMessages(); renderModels(); renderWebToggle();
+  scrollMessages(true);
+  $("#prompt").focus();
+}
+
+function renderThreads() {
+  const list = $("#threadList");
+  list.replaceChildren();
+  const threads = visibleThreads();
+  if (!threads.length) list.append(el("div", { class: "muted", style: "padding:14px 10px;font-size:13px" }, "Noch keine Chats."));
+  for (const t of threads) {
+    const del = el("button", { class: "icon-btn", title: "Löschen", html: icon("trash"), onclick: ev => { ev.stopPropagation(); deleteThread(t); } });
+    list.append(el("div", { class: "thread" + (t.id === S.threadID ? " active" : ""), onclick: () => selectThread(t.id) },
+      el("span", { class: "tt" }, t.title || "Neuer Chat"), del));
+  }
+}
+
+function deleteThread(t) {
+  if (!confirm(`Chat „${t.title || "Neuer Chat"}“ löschen?`)) return;
+  if (t.id === S.threadID) selectThread(null);
+  put({ threads: [{ ...t, deleted: true, updatedAt: nowISO() }] });
+}
+
+let stickToBottom = true;
+function scrollMessages(force) {
+  const m = $("#messages");
+  if (force || stickToBottom) requestAnimationFrame(() => { m.scrollTop = m.scrollHeight; });
+}
+
+function renderMessages() {
+  const box = $("#messages");
+  const t = currentThread();
+  $("#chatTitle").textContent = t ? (t.title || "Neuer Chat") : "Neuer Chat";
+  box.replaceChildren();
+  if (!t || !t.messages.length) {
+    box.append(el("div", { class: "chat-empty" }, blueyNode(120, { x: 0.3, y: 0.4 }),
+      el("div", { class: "display", style: "font-size:24px;color:var(--text)" }, "Worüber wollen wir reden?"),
+      el("div", { style: "font-size:14px;max-width:360px" }, "Frag Bluey etwas, häng Bilder oder PDFs an und wähle unten dein Modell.")));
+    renderSendButton();
+    return;
+  }
+  const inner = el("div", { class: "msgs-inner" });
+  for (const m of t.messages) inner.append(messageNode(m));
+  box.append(inner);
+  renderSendButton();
+  scrollMessages(false);
+}
+
+function attachmentNode(a, big) {
+  const href = "/api/attachments/" + encodeURIComponent(a.id);
+  const link = el("a", { class: "att" + (big && a.thumbnail ? " big" : ""), href, target: "_blank", rel: "noopener" });
+  if (a.thumbnail) link.append(el("img", { src: "data:image/jpeg;base64," + a.thumbnail, alt: a.name }));
+  else link.innerHTML = icon("file", 'width="20" height="20"');
+  if (!(big && a.thumbnail)) link.append(el("span", { class: "an" }, a.name), el("span", { class: "muted", style: "font-size:11px" }, fmtSize(a.size || 0)));
+  return link;
+}
+
+function messageNode(m) {
+  const row = el("div", { class: "msg " + m.role, "data-id": m.id });
+  const bubble = el("div", { class: "bubble" });
+  if (m.attachments && m.attachments.length) {
+    bubble.append(el("div", { class: "atts", style: m.role === "assistant" ? "justify-content:flex-start" : "" }, m.attachments.map(a => attachmentNode(a, m.attachments.length === 1))));
+  }
+  const body = el("div", { class: "content" });
+  fillContent(body, m);
+  bubble.append(body);
+  if (m.role === "assistant") {
+    if (m.status === "failed") bubble.append(el("div", { class: "err" }, m.error || "Das hat nicht geklappt."));
+    if (m.status === "stopped") bubble.append(el("div", { class: "meta" }, "Gestoppt"));
+    if (m.model && m.status !== "streaming") bubble.append(el("div", { class: "meta" }, m.model));
+    row.append(el("span", { class: "avatar" }, blueyNode(34, m.status === "streaming" ? { x: 0.8, y: -0.8 } : { x: 0.3, y: 0.2 })), bubble);
+  } else {
+    row.append(bubble);
+  }
+  return row;
+}
+
+function fillContent(body, m) {
+  if (m.role === "user") { body.textContent = m.text; return; }
+  if (!m.text && m.status === "streaming") { body.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>'; return; }
+  body.innerHTML = markdown(m.text || "");
+}
+
+function applyDelta(d) {
+  const t = S.snap.threads.find(x => x.id === d.threadID);
+  if (!t) return;
+  const m = t.messages.find(x => x.id === d.messageID);
+  if (!m) return;
+  m.text = d.text;
+  if (t.id !== S.threadID || S.section !== "chat") return;
+  const node = document.querySelector(`.msg[data-id="${CSS.escape(d.messageID)}"] .content`);
+  if (node) { fillContent(node, m); scrollMessages(false); }
+  else renderMessages();
+}
+
+// Light, safe markdown: escape everything first, then add a handful of tags.
+function inlineMD(s) {
+  let out = esc(s);
+  const codes = [];
+  out = out.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return "\u0000" + (codes.length - 1) + "\u0000"; });
+  out = out.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  out = out.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, text, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`);
+  out = out.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (_, pre, url) => `${pre}<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+  out = out.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`);
+  return out;
+}
+function markdown(src) {
+  const parts = src.split(/```/);
+  let html = "";
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) {
+      const nl = part.indexOf("\n");
+      const code = nl >= 0 && /^[\w+#.-]*$/.test(part.slice(0, nl).trim()) ? part.slice(nl + 1) : part;
+      html += `<pre><code>${esc(code.replace(/\n$/, ""))}</code></pre>`;
+      return;
+    }
+    const lines = part.split("\n");
+    let para = [], list = null;
+    const flushPara = () => { if (para.length) { html += `<p>${para.map(inlineMD).join("<br>")}</p>`; para = []; } };
+    const flushList = () => { if (list) { html += `<${list.type}>${list.items.map(x => `<li>${inlineMD(x)}</li>`).join("")}</${list.type}>`; list = null; } };
+    for (const raw of lines) {
+      const line = raw.replace(/\s+$/, "");
+      let m;
+      if (!line.trim()) { flushPara(); flushList(); continue; }
+      if ((m = line.match(/^\s*[-*•]\s+(.*)$/))) { flushPara(); if (!list || list.type !== "ul") { flushList(); list = { type: "ul", items: [] }; } list.items.push(m[1]); continue; }
+      if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) { flushPara(); if (!list || list.type !== "ol") { flushList(); list = { type: "ol", items: [] }; } list.items.push(m[1]); continue; }
+      if ((m = line.match(/^#{1,6}\s+(.*)$/))) { flushPara(); flushList(); html += `<h4>${inlineMD(m[1])}</h4>`; continue; }
+      flushList(); para.push(line);
+    }
+    flushPara(); flushList();
+  });
+  return html;
+}
+
+// Composer
+function renderModels() {
+  const sel = $("#modelSelect");
+  const models = S.snap.models.length ? S.snap.models : (S.snap.defaultModel ? [{ id: S.snap.defaultModel, name: S.snap.defaultModel }] : []);
+  const t = currentThread();
+  const wanted = (t && t.model) || store.get("bluey.model", "") || S.snap.defaultModel || (models[0] && models[0].id) || "";
+  const ids = models.map(m => m.id);
+  if (wanted && !ids.includes(wanted)) models.push({ id: wanted, name: wanted });
+  const current = sel.dataset.sig;
+  const sig = models.map(m => m.id).join("|") + "#" + wanted;
+  if (current === sig) return;
+  sel.dataset.sig = sig;
+  sel.replaceChildren(...models.map(m => el("option", { value: m.id }, m.name || m.id)));
+  sel.value = wanted;
+  sel.disabled = !models.length;
+}
+function renderWebToggle() {
+  const w = $("#webToggle");
+  w.classList.toggle("on", S.webSearch);
+  w.setAttribute("aria-checked", S.webSearch ? "true" : "false");
+}
+function renderPending() {
+  const box = $("#pending");
+  box.replaceChildren(...S.pending.map(a => el("span", { class: "pchip" },
+    a.thumbnail ? el("img", { src: "data:image/jpeg;base64," + a.thumbnail, alt: "" }) : el("span", { html: icon("file", 'width="16" height="16"') }),
+    el("span", { class: "an" }, a.name),
+    el("button", { title: "Entfernen", onclick: () => { S.pending = S.pending.filter(x => x.id !== a.id); renderPending(); renderSendButton(); } }, "×"))));
+  if (S.uploading) box.append(el("span", { class: "pchip muted" }, `Lade ${S.uploading} Datei${S.uploading > 1 ? "en" : ""} hoch…`));
+}
+function renderSendButton() {
+  const btn = $("#sendBtn");
+  const t = currentThread();
+  const streaming = !!(t && t.messages.length && t.messages[t.messages.length - 1].status === "streaming");
+  btn.classList.toggle("stop", streaming);
+  btn.innerHTML = icon(streaming ? "stop" : "send");
+  btn.setAttribute("aria-label", streaming ? "Stopp" : "Senden");
+  btn.disabled = !streaming && (S.sending || S.uploading > 0 || (!$("#prompt").value.trim() && !S.pending.length));
+}
+
+async function uploadFiles(files) {
+  for (const file of files) {
+    if (file.size > 10 * 1024 * 1024) { toast(`„${file.name}“ ist größer als 10 MB.`); continue; }
+    S.uploading++; renderPending(); renderSendButton();
+    try {
+      const att = await api("/api/attachments", {
+        method: "POST",
+        headers: { "Content-Type": file.type || "application/octet-stream", "X-Filename": encodeURIComponent(file.name || "datei") },
+        body: file,
+      });
+      S.pending.push(att);
+    } catch (e) { toast(`Upload fehlgeschlagen (${file.name}): ${e.message}`); }
+    finally { S.uploading--; renderPending(); renderSendButton(); }
+  }
+}
+
+async function send() {
+  const t = currentThread();
+  if (t && t.messages.length && t.messages[t.messages.length - 1].status === "streaming") {
+    try { await postJSON("/api/chat/stop", { threadID: t.id }); } catch (e) { toast(e.message); }
+    return;
+  }
+  const prompt = $("#prompt");
+  const text = prompt.value.trim();
+  if ((!text && !S.pending.length) || S.sending || S.uploading) return;
+  const model = $("#modelSelect").value || null;
+  S.sending = true; renderSendButton();
+  try {
+    const res = await postJSON("/api/chat", { threadID: t ? t.id : null, text, attachments: S.pending, model, webSearch: S.webSearch });
+    prompt.value = ""; autosize(); S.pending = []; renderPending();
+    stickToBottom = true;
+    if (res && res.threadID && res.threadID !== S.threadID) selectThread(res.threadID);
+    else scrollMessages(true);
+  } catch (e) { toast("Senden fehlgeschlagen: " + e.message); }
+  finally { S.sending = false; renderSendButton(); }
+}
+function autosize() { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(220, p.scrollHeight) + "px"; }
+
+function initChat() {
+  $("#attachBtn").innerHTML = icon("clip");
+  $("#chatBack").innerHTML = icon("back");
+  $("#chatBack").onclick = () => selectThread(null);
+  $("#newChat").onclick = () => { selectThread(null); $("#chat").classList.add("has-thread"); };
+  $("#attachBtn").onclick = () => $("#fileInput").click();
+  $("#fileInput").onchange = e => { uploadFiles([...e.target.files]); e.target.value = ""; };
+  $("#sendBtn").onclick = send;
+  const prompt = $("#prompt");
+  prompt.addEventListener("input", () => { autosize(); renderSendButton(); });
+  prompt.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+  prompt.addEventListener("paste", e => {
+    const files = [...(e.clipboardData?.files || [])];
+    if (files.length) { e.preventDefault(); uploadFiles(files); }
+  });
+  const composer = $("#composer");
+  ["dragenter", "dragover"].forEach(ev => composer.addEventListener(ev, e => { e.preventDefault(); composer.classList.add("drag"); }));
+  ["dragleave", "drop"].forEach(ev => composer.addEventListener(ev, e => { e.preventDefault(); composer.classList.remove("drag"); }));
+  composer.addEventListener("drop", e => { const files = [...(e.dataTransfer?.files || [])]; if (files.length) uploadFiles(files); });
+  $("#modelSelect").onchange = e => {
+    store.set("bluey.model", e.target.value);
+    const t = currentThread();
+    if (t) put({ threads: [{ ...t, model: e.target.value, updatedAt: nowISO() }] });
+  };
+  const toggleWeb = () => {
+    S.webSearch = !S.webSearch; store.set("bluey.web", S.webSearch ? "1" : "0"); renderWebToggle();
+    const t = currentThread();
+    if (t) put({ threads: [{ ...t, webSearch: S.webSearch, updatedAt: nowISO() }] });
+  };
+  $("#webToggle").onclick = toggleWeb;
+  $("#webToggle").onkeydown = e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleWeb(); } };
+  const m = $("#messages");
+  m.addEventListener("scroll", () => { stickToBottom = m.scrollHeight - m.scrollTop - m.clientHeight < 80; });
+  renderWebToggle();
+  $("#chat").classList.toggle("has-thread", !!S.threadID);
+}
+
+// =====================================================================
+// Todos
+// =====================================================================
+function saveTodo(t, changes) { put({ todos: [{ ...t, ...changes, updatedAt: nowISO() }] }); }
+function dueToInput(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function inputToDue(v) {
+  if (!v) return null;
+  const [y, m, d] = v.split("-").map(Number);
+  return new Date(y, m - 1, d, 12).toISOString();
+}
+
+function renderTodoFilters() {
+  const box = $("#todoFilters");
+  box.replaceChildren(...[["all", "Alle"], ["today", "Heute"], ["important", "Wichtig"]].map(([id, title]) =>
+    el("button", { class: "chip" + (S.todoFilter === id ? " on" : ""), onclick: () => { S.todoFilter = id; renderTodos(); } }, title)));
+}
+
+function todoMatches(t) {
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  if (S.todoFilter === "today") {
+    if (t.done) return t.completedAt && sameDay(new Date(t.completedAt), new Date());
+    return t.due && new Date(t.due) <= today;
+  }
+  if (S.todoFilter === "important") return t.important;
+  return true;
+}
+
+let doneOpen = false;
+function renderTodos() {
+  renderTodoFilters();
+  const list = $("#todoList");
+  // Don't rebuild while someone is typing in a todo (keeps the cursor).
+  if (list.contains(document.activeElement) && document.activeElement.matches("input")) return;
+  const todos = S.snap.todos.filter(t => !t.deleted && todoMatches(t));
+  const open = todos.filter(t => !t.done).sort((a, b) => (b.important - a.important) || ((a.due ? new Date(a.due) : 9e15) - (b.due ? new Date(b.due) : 9e15)) || (new Date(a.createdAt) - new Date(b.createdAt)));
+  const done = todos.filter(t => t.done).sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
+  list.replaceChildren();
+  if (!open.length) {
+    list.append(el("div", { class: "empty" }, blueyNode(70), el("div", { style: "margin-top:10px" },
+      S.todoFilter === "all" ? "Nichts offen. Gönn dir was. 🫐" : "Hier ist gerade nichts.")));
+  }
+  open.forEach(t => list.append(todoNode(t)));
+  if (done.length) {
+    const box = el("details", { class: "donebox" });
+    box.open = doneOpen;
+    box.addEventListener("toggle", () => { doneOpen = box.open; });
+    box.append(el("summary", {}, `Erledigt (${done.length})`), ...done.map(todoNode));
+    list.append(box);
+  }
+}
+
+function todoNode(t) {
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const overdue = !t.done && t.due && new Date(t.due) < startOfToday;
+  const title = el("input", { class: "tt", value: t.title, "aria-label": "Titel" });
+  title.addEventListener("change", () => { const v = title.value.trim(); if (v && v !== t.title) saveTodo(t, { title: v }); else title.value = t.title; });
+  title.addEventListener("keydown", e => { if (e.key === "Enter") title.blur(); });
+  const due = el("input", { type: "date", value: dueToInput(t.due), "aria-label": "Fällig" });
+  due.addEventListener("change", () => saveTodo(t, { due: inputToDue(due.value) }));
+  const est = el("input", { type: "number", min: "1", max: "600", placeholder: "Min", value: t.estimateMinutes ?? "", "aria-label": "Schätzung in Minuten" });
+  est.addEventListener("change", () => { const n = parseInt(est.value, 10); saveTodo(t, { estimateMinutes: Number.isFinite(n) && n > 0 ? n : null }); });
+  const extra = el("div", { class: "extra" },
+    el("span", { class: overdue ? "overdue" : "" }, overdue ? "Überfällig" : "Fällig"), due,
+    el("span", {}, "Schätzung"), est,
+    t.estimateMinutes ? el("span", { class: "real" }, `×3 realistisch: ${t.estimateMinutes * 3} min`) : null);
+  return el("div", { class: "todo" + (t.done ? " done" : "") },
+    el("button", { class: "check" + (t.done ? " on" : ""), "aria-label": t.done ? "Als offen markieren" : "Erledigt", html: t.done ? icon("check") : "",
+      onclick: () => saveTodo(t, { done: !t.done, completedAt: t.done ? null : nowISO() }) }),
+    el("div", { class: "body" }, title, extra),
+    el("button", { class: "icon-btn star" + (t.important ? " on" : ""), title: "Wichtig", html: icon("star", t.important ? 'fill="currentColor"' : ""),
+      onclick: () => saveTodo(t, { important: !t.important }) }),
+    el("button", { class: "icon-btn", title: "Löschen", html: icon("trash"), onclick: () => saveTodo(t, { deleted: true }) }));
+}
+
+function initTodos() {
+  $("#todoForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const input = $("#todoInput");
+    const title = input.value.trim();
+    if (!title) return;
+    const now = nowISO();
+    const due = S.todoFilter === "today" ? inputToDue(dueToInput(now)) : null;
+    put({ todos: [{ id: newID(), title, notes: "", done: false, important: S.todoFilter === "important", due, estimateMinutes: null,
+      createdAt: now, completedAt: null, updatedAt: now, deleted: false }] });
+    input.value = "";
+  });
+}
+
+// =====================================================================
+// Notes
+// =====================================================================
+const visibleNotes = () => S.snap.notes.filter(n => !n.deleted)
+  .sort((a, b) => (b.pinned - a.pinned) || (new Date(b.updatedAt) - new Date(a.updatedAt)));
+const noteTitle = n => (n.title || "").trim() || ((n.body || "").split("\n").find(l => l.trim()) || "Neue Notiz").slice(0, 80);
+const currentNote = () => S.snap.notes.find(n => n.id === S.noteID && !n.deleted) || null;
+
+function renderNotesList() {
+  const q = $("#noteSearch").value.trim().toLowerCase();
+  const items = $("#noteItems");
+  const notes = visibleNotes().filter(n => !q || (n.title + "\n" + n.body).toLowerCase().includes(q));
+  items.replaceChildren();
+  if (!notes.length) items.append(el("div", { class: "muted", style: "padding:14px 10px;font-size:13px" }, q ? "Nichts gefunden." : "Noch keine Notizen."));
+  for (const n of notes) {
+    const preview = (n.body || "").replace(/\s+/g, " ").trim().slice(0, 90);
+    items.append(el("div", { class: "note-item" + (n.id === S.noteID ? " active" : ""), onclick: () => selectNote(n.id) },
+      el("div", { class: "nt" }, (n.pinned ? "📌 " : "") + noteTitle(n)),
+      el("div", { class: "np" }, preview || fmtDate(n.updatedAt))));
+  }
+}
+
+function selectNote(id) {
+  flushNote();
+  S.noteID = id;
+  $("#notes").classList.toggle("has-note", !!id);
+  renderNotesList(); renderNoteEditor(true);
+}
+
+function renderNoteEditor(force) {
+  const n = currentNote();
+  const editor = $("#noteEditor");
+  if (!n) {
+    if (S.noteID && !force) { S.noteID = null; $("#notes").classList.remove("has-note"); }
+    editor.style.visibility = "hidden";
+    return;
+  }
+  editor.style.visibility = "visible";
+  const title = $("#noteTitle"), body = $("#noteBody");
+  const editing = document.activeElement === title || document.activeElement === body || noteDirty;
+  if (force || !editing) {
+    title.value = n.title || "";
+    body.value = n.body || "";
+  }
+  $("#noteMeta").textContent = "Zuletzt geändert " + fmtDate(n.updatedAt) + " " + fmtTime(n.updatedAt);
+  $("#notePin").style.color = n.pinned ? "#FFD66B" : "";
+}
+
+let noteDirty = false;
+const saveNoteSoon = debounce(() => flushNote(), 600);
+function flushNote() {
+  if (!noteDirty) return;
+  noteDirty = false;
+  const n = currentNote();
+  if (!n) return;
+  const title = $("#noteTitle").value, body = $("#noteBody").value;
+  if (title === n.title && body === n.body) return;
+  put({ notes: [{ ...n, title, body, updatedAt: nowISO() }] });
+}
+
+function initNotes() {
+  $("#notePin").innerHTML = icon("pin");
+  $("#noteDelete").innerHTML = icon("trash");
+  $("#noteBack").innerHTML = icon("back");
+  $("#noteBack").onclick = () => selectNote(null);
+  $("#newNote").onclick = () => {
+    const now = nowISO();
+    const note = { id: newID(), title: "", body: "", pinned: false, createdAt: now, updatedAt: now, deleted: false };
+    put({ notes: [note] });
+    selectNote(note.id);
+    $("#noteTitle").focus();
+  };
+  $("#noteSearch").addEventListener("input", renderNotesList);
+  for (const id of ["#noteTitle", "#noteBody"]) $(id).addEventListener("input", () => { noteDirty = true; saveNoteSoon(); });
+  $("#noteTitle").addEventListener("blur", flushNote);
+  $("#noteBody").addEventListener("blur", flushNote);
+  $("#notePin").onclick = () => { const n = currentNote(); if (n) { flushNote(); put({ notes: [{ ...currentNote(), pinned: !n.pinned, updatedAt: nowISO() }] }); } };
+  $("#noteDelete").onclick = () => {
+    const n = currentNote();
+    if (!n || !confirm(`Notiz „${noteTitle(n)}“ löschen?`)) return;
+    noteDirty = false;
+    put({ notes: [{ ...n, deleted: true, updatedAt: nowISO() }] });
+    selectNote(null);
+  };
+  window.addEventListener("beforeunload", flushNote);
+  renderNoteEditor(true);
+}
+
+// =====================================================================
+// Pomodoro (same transitions as PomodoroState in Swift; the Mac advances finished phases)
+// =====================================================================
+const PHASE_TITLE = { idle: "Bereit", focus: "Fokus", shortBreak: "Kurze Pause", longBreak: "Lange Pause" };
+function defaultSettings() { return { focusMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15, roundsPerLongBreak: 4, watchScreen: false }; }
+function pomoState() {
+  const p = S.snap.pomodoro;
+  const base = { phase: "idle", phaseID: newID(), startedAt: null, duration: 1500, pausedRemaining: null, phaseBegan: null, round: 0, label: "", todoID: null, settings: defaultSettings(), updatedAt: new Date(0).toISOString() };
+  if (!p) return base;
+  return { ...base, ...p, settings: { ...defaultSettings(), ...(p.settings || {}) } };
+}
+const P = {
+  remaining(p, now = Date.now()) {
+    if (p.phase === "idle") return p.settings.focusMinutes * 60;
+    const left = p.pausedRemaining ?? p.duration;
+    if (p.startedAt) return Math.max(0, left - (now - new Date(p.startedAt).getTime()) / 1000);
+    return left;
+  },
+  startFocus(p, label, todoID) {
+    const now = nowISO();
+    return { ...p, phase: "focus", phaseID: newID(), duration: Math.max(60, p.settings.focusMinutes * 60), pausedRemaining: null, startedAt: now, phaseBegan: now, label, todoID, updatedAt: now };
+  },
+  startBreak(p) {
+    const now = nowISO();
+    const long = p.round > 0 && p.round % Math.max(1, p.settings.roundsPerLongBreak) === 0;
+    return { ...p, phase: long ? "longBreak" : "shortBreak", phaseID: newID(), duration: Math.max(60, (long ? p.settings.longBreakMinutes : p.settings.shortBreakMinutes) * 60), pausedRemaining: null, startedAt: now, phaseBegan: now, updatedAt: now };
+  },
+  pause(p) { if (p.phase === "idle" || !p.startedAt) return p; return { ...p, pausedRemaining: P.remaining(p), startedAt: null, updatedAt: nowISO() }; },
+  resume(p) { if (p.phase === "idle" || p.startedAt) return p; return { ...p, startedAt: nowISO(), updatedAt: nowISO() }; },
+  stop(p) { return { ...p, phase: "idle", startedAt: null, pausedRemaining: null, phaseBegan: null, updatedAt: nowISO() }; },
+  skip(p) { if (p.phase === "focus") return P.startBreak(p); if (p.phase !== "idle") return P.stop(p); return p; },
+};
+const savePomo = p => put({ pomodoro: p });
+
+let pomoBuiltSig = "";
+function renderPomodoro(stateChanged) {
+  const root = $("#pomoRoot");
+  const p = pomoState();
+  const running = p.phase !== "idle" && !!p.startedAt;
+  const paused = p.phase !== "idle" && !p.startedAt;
+  const sig = [p.phase, running, paused, p.updatedAt, S.snap.todos.length, S.snap.pomodoroLog.length].join("|");
+  if (stateChanged && sig === pomoBuiltSig && root.contains(document.activeElement) && document.activeElement.matches("input,select")) { tickPomodoro(); return; }
+  if (!stateChanged && pomoBuiltSig) { tickPomodoro(); return; }
+  pomoBuiltSig = sig;
+
+  const R = 140, C = 2 * Math.PI * R;
+  const color = p.phase === "focus" ? "var(--berry2)" : p.phase === "idle" ? "rgba(169,188,255,.5)" : "var(--good)";
+  const ring = el("div", { class: "ring-wrap", html:
+    `<svg viewBox="0 0 320 320"><circle cx="160" cy="160" r="${R}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="16"/>
+     <circle id="pomoArc" cx="160" cy="160" r="${R}" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg>` });
+  const center = el("div", { class: "ring-center" },
+    blueyNode(54, p.phase === "focus" ? { x: 0, y: 0.8 } : { x: 0.4, y: -0.2 }),
+    el("div", { class: "time", id: "pomoTime" }, clock(P.remaining(p))),
+    el("div", { class: "label" }, PHASE_TITLE[p.phase] + (paused ? " · pausiert" : "")),
+    p.label && p.phase !== "idle" ? el("div", { class: "muted", style: "font-size:14px;max-width:200px;text-align:center" }, p.label) : null);
+  ring.append(center);
+
+  const controls = el("div", { class: "pomo-row" });
+  if (p.phase === "idle") {
+    // Every pomodoro belongs to a todo: pick one, or type a new one.
+    const openTodos = S.snap.todos.filter(t => !t.deleted && !t.done);
+    const keep = openTodos.some(t => t.id === p.todoID) ? p.todoID : "";
+    const todoSel = el("select", { class: "input", id: "pomoTodo", style: "min-width:220px" },
+      el("option", { value: "", disabled: true, selected: !keep }, openTodos.length ? "Todo wählen…" : "Noch keine Todos"),
+      ...openTodos.map(t => el("option", { value: t.id, selected: t.id === keep }, t.title)));
+    const fresh = el("input", { class: "input", id: "pomoNewTodo", placeholder: "…oder neues Todo", style: "min-width:200px" });
+    const startBtn = el("button", { class: "btn primary" }, `▶ ${p.settings.focusMinutes} min Fokus`);
+    const sync = () => { startBtn.disabled = !todoSel.value && !fresh.value.trim(); };
+    const start = () => {
+      let todo = openTodos.find(x => x.id === todoSel.value);
+      const title = fresh.value.trim();
+      if (title) {
+        const now = nowISO();
+        todo = { id: newID(), title, notes: "", done: false, important: false, due: null, estimateMinutes: null, createdAt: now, completedAt: null, updatedAt: now, deleted: false };
+        put({ todos: [todo] });
+      }
+      if (!todo) { todoSel.focus(); return; }
+      savePomo(P.startFocus(p, todo.title, todo.id));
+    };
+    todoSel.addEventListener("change", () => { fresh.value = ""; sync(); });
+    fresh.addEventListener("input", sync);
+    fresh.addEventListener("keydown", e => { if (e.key === "Enter") start(); });
+    startBtn.addEventListener("click", start);
+    sync();
+    controls.append(todoSel, fresh, startBtn);
+    const current = openTodos.find(t => t.id === keep);
+    if (p.round > 0 && current) controls.append(el("button", { class: "btn", onclick: () => saveTodo(current, { done: true, completedAt: nowISO() }) }, "✓ Todo erledigt"));
+    if (p.round > 0) controls.append(el("button", { class: "btn", onclick: () => savePomo(P.startBreak(p)) }, "Pause starten"));
+  } else {
+    controls.append(
+      running ? el("button", { class: "btn primary", onclick: () => savePomo(P.pause(p)) }, "Pause")
+              : el("button", { class: "btn primary", onclick: () => savePomo(P.resume(p)) }, "Weiter"),
+      el("button", { class: "btn", onclick: () => savePomo(P.skip(p)) }, "Überspringen"),
+      el("button", { class: "btn danger", onclick: () => savePomo(P.stop(p)) }, "Stopp"));
+  }
+
+  const rounds = el("div", { class: "muted", style: "font-size:13px" },
+    p.phase.endsWith("Break")
+      ? `${p.round} Runde${p.round === 1 ? "" : "n"} geschafft`
+      : `Runde ${(p.round % Math.max(1, p.settings.roundsPerLongBreak)) + 1} von ${p.settings.roundsPerLongBreak} bis zur langen Pause`);
+
+  // Settings
+  const num = (key, title, min, max) => {
+    const input = el("input", { class: "input", type: "number", min, max, value: p.settings[key] });
+    input.addEventListener("change", () => {
+      const v = Math.min(max, Math.max(min, Number(input.value) || p.settings[key]));
+      savePomo({ ...pomoState(), settings: { ...pomoState().settings, [key]: key === "roundsPerLongBreak" ? Math.round(v) : v }, updatedAt: nowISO() });
+    });
+    return el("label", {}, title, input);
+  };
+  const watch = el("input", { type: "checkbox", checked: p.settings.watchScreen });
+  watch.addEventListener("change", () => savePomo({ ...pomoState(), settings: { ...pomoState().settings, watchScreen: watch.checked }, updatedAt: nowISO() }));
+  const settings = el("div", { class: "card", style: "width:100%" },
+    el("div", { class: "label", style: "margin-bottom:12px" }, "Einstellungen"),
+    el("div", { class: "settings-grid" }, num("focusMinutes", "Fokus (min)", 1, 180), num("shortBreakMinutes", "Kurze Pause", 1, 60), num("longBreakMinutes", "Lange Pause", 1, 90), num("roundsPerLongBreak", "Runden", 1, 12)),
+    el("label", { class: "switch" }, watch, el("span", {}, "Bluey schaut mit (Bildschirm-Check auf dem Mac)")));
+
+  // Today's log
+  const today = S.snap.pomodoroLog.filter(r => !r.deleted && sameDay(new Date(r.completedAt), new Date()))
+    .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+  const log = el("div", { class: "card", style: "width:100%" },
+    el("div", { class: "label", style: "margin-bottom:8px" }, `Heute geschafft · ${today.length} 🍅 · ${Math.round(today.reduce((s, r) => s + r.minutes, 0))} min`),
+    today.length ? today.map(r => el("div", { class: "log-item" }, el("span", {}, r.label || "Fokus"), el("span", { class: "muted mono" }, `${fmtTime(r.completedAt)} · ${Math.round(r.minutes)} min`)))
+                 : el("div", { class: "muted", style: "font-size:14px" }, "Noch keine Runde heute. Eine reicht für den Anfang."));
+
+  root.replaceChildren(el("h1", { class: "title", style: "align-self:flex-start" }, "Pomodoro"), ring, controls, rounds, log, settings);
+  tickPomodoro();
+}
+function tickPomodoro() {
+  const p = pomoState();
+  const t = $("#pomoTime"), arc = $("#pomoArc");
+  if (!t || !arc) return;
+  const left = P.remaining(p);
+  t.textContent = clock(left);
+  const C = 2 * Math.PI * 140;
+  const prog = p.phase === "idle" || !p.duration ? 0 : Math.min(1, Math.max(0, 1 - left / p.duration));
+  arc.setAttribute("stroke-dashoffset", String(C * (1 - prog)));
+  if (S.section === "pomodoro" && p.phase !== "idle") document.title = `${clock(left)} · ${PHASE_TITLE[p.phase]} · Bluey`;
+  else document.title = "Bluey";
+}
+
+// =====================================================================
+// Stats
+// =====================================================================
+function renderStats() {
+  const s = S.stats;
+  const tiles = $("#tiles");
+  if (!s) { tiles.replaceChildren(el("div", { class: "muted" }, "Lade Statistik…")); return; }
+  const tile = (label, value, sub) => el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "v" }, value), sub ? el("div", { class: "s" }, sub) : null);
+  const list = [
+    tile("Heute Fokus", Math.round(s.todayFocusMinutes) + " min", `${Math.round(s.weekFocusMinutes)} min diese Woche`),
+    tile("Pomodoros heute", s.todayPomodoros, `${s.totalPomodoros} insgesamt`),
+    tile("Todos erledigt", s.todayTodosDone, `${s.weekTodosDone} in 7 Tagen`),
+    tile("Serie", s.streakDays + (s.streakDays === 1 ? " Tag" : " Tage"), s.streakDays ? "Weiter so, ohne Druck." : "Heute ist ein guter Start."),
+    tile("Offen", s.openTodos, s.overdueTodos ? `${s.overdueTodos} überfällig` : "nichts überfällig"),
+  ];
+  if (s.onTaskShare != null) list.push(tile("On-Task-Anteil", Math.round(s.onTaskShare * 100) + " %", `${s.focusSessions} Bluey-Sessions (7 Tage)`));
+  tiles.replaceChildren(...list);
+  renderChart(s.days || []);
+}
+function renderChart(days) {
+  const W = 700, H = 240, padL = 34, padB = 30, padT = 14;
+  const innerW = W - padL - 10, innerH = H - padB - padT;
+  const maxF = Math.max(30, ...days.map(d => d.focusMinutes));
+  const maxT = Math.max(3, ...days.map(d => d.todosDone));
+  const slot = innerW / Math.max(1, days.length);
+  const bw = Math.min(26, slot / 3);
+  const wd = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Fokus-Minuten und erledigte Todos der letzten 7 Tage">`;
+  for (let i = 0; i <= 3; i++) {
+    const y = padT + innerH * (1 - i / 3);
+    svg += `<line x1="${padL}" x2="${W - 10}" y1="${y}" y2="${y}" stroke="rgba(255,255,255,.07)"/>`;
+    svg += `<text x="${padL - 6}" y="${y + 4}" fill="#B9B2CC" font-size="11" text-anchor="end" font-family="IBM Plex Mono">${Math.round(maxF * i / 3)}</text>`;
+  }
+  days.forEach((d, i) => {
+    const x = padL + slot * i + slot / 2;
+    const hf = innerH * (d.focusMinutes / maxF), ht = innerH * (d.todosDone / maxT);
+    const date = new Date(d.date);
+    const isToday = sameDay(date, new Date());
+    svg += `<rect x="${x - bw - 2}" y="${padT + innerH - hf}" width="${bw}" height="${Math.max(0, hf)}" rx="5" fill="#6C86F5"><title>${Math.round(d.focusMinutes)} Fokus-Minuten</title></rect>`;
+    svg += `<rect x="${x + 2}" y="${padT + innerH - ht}" width="${bw}" height="${Math.max(0, ht)}" rx="5" fill="#5BE49B"><title>${d.todosDone} Todos erledigt</title></rect>`;
+    svg += `<text x="${x}" y="${H - 10}" fill="${isToday ? "#F4F2FA" : "#B9B2CC"}" font-size="12" text-anchor="middle" font-weight="${isToday ? 600 : 400}">${isToday ? "Heute" : wd[date.getDay()]}</text>`;
+  });
+  svg += "</svg>";
+  $("#chart").innerHTML = svg;
+}
+
+// =====================================================================
+// Face (canvas) + Bluey focus session
+// =====================================================================
+const face = { raf: 0, mouse: { x: 0, y: 0 }, gx: 0, gy: 0, blinkAt: 0, nextBlink: 2000, lid: 0, talk: 0 };
+function startFace() {
+  if (face.raf) return;
+  const loop = t => { drawFace(t); face.raf = requestAnimationFrame(loop); };
+  face.raf = requestAnimationFrame(loop);
+}
+function stopFace() { if (face.raf) cancelAnimationFrame(face.raf); face.raf = 0; }
+
+function blobPath(ctx, cx, cy, w, h) {
+  ctx.beginPath();
+  ctx.moveTo(cx + w * 0.04, cy - h * 0.5);
+  ctx.bezierCurveTo(cx + w * 0.34, cy - h * 0.5, cx + w * 0.5, cy - h * 0.26, cx + w * 0.5, cy + h * 0.02);
+  ctx.bezierCurveTo(cx + w * 0.5, cy + h * 0.32, cx + w * 0.28, cy + h * 0.5, cx - w * 0.01, cy + h * 0.5);
+  ctx.bezierCurveTo(cx - w * 0.32, cy + h * 0.5, cx - w * 0.5, cy + h * 0.3, cx - w * 0.5, cy - h * 0.02);
+  ctx.bezierCurveTo(cx - w * 0.5, cy - h * 0.3, cx - w * 0.26, cy - h * 0.5, cx + w * 0.04, cy - h * 0.5);
+  ctx.closePath();
+}
+
+function drawFace(t) {
+  const canvas = $("#faceCanvas");
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  if (!W || !H) return;
+  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const live = performance.now() - S.faceAt < 2500;
+  const mood = live ? S.face.mood : "listening";
+  let tx, ty;
+  if (live) { tx = S.face.gazeX; ty = S.face.gazeY; }
+  else { tx = face.mouse.x; ty = face.mouse.y; }
+  if (mood === "thinking") { tx = 0.7; ty = -0.8; }
+  if (mood === "sleepy" || mood === "resting") { ty = Math.max(ty, 0.3); }
+  face.gx += (tx - face.gx) * 0.18; face.gy += (ty - face.gy) * 0.18;
+  face.talk += ((live && mood === "talking" ? Math.max(0.25, S.face.talk || 0) : 0) - face.talk) * 0.3;
+
+  // Blink
+  if (t - face.blinkAt > face.nextBlink) { face.blinkAt = t; face.nextBlink = 2200 + Math.random() * 3500; }
+  const bt = (t - face.blinkAt) / 140;
+  const blink = bt < 1 ? Math.sin(bt * Math.PI) : 0;
+  const baseLid = mood === "sleepy" ? 0.55 : mood === "resting" ? 0.35 : 0;
+  const lid = Math.max(baseLid, blink);
+
+  // Body: big, peeking up from the bottom like on the phone.
+  const size = Math.min(W * 0.9, H * 1.5);
+  const bw = size, bh = size * 0.86;
+  const breathe = Math.sin(t / 900) * 0.008;
+  const hop = mood === "happy" ? Math.abs(Math.sin(t / 220)) * 10 : 0;
+  const cx = W / 2, cy = H - bh * 0.36 - hop + face.talk * Math.sin(t / 70) * 6;
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(face.gx * 0.05); ctx.scale(1 + breathe, 1 - breathe); ctx.translate(-cx, -cy);
+  const grad = ctx.createLinearGradient(cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2);
+  [["#A9BCFF", 0], ["#6C86F5", 0.34], ["#4254D6", 0.68], ["#2B2F8F", 1]].forEach(([c, s]) => grad.addColorStop(s, c));
+  blobPath(ctx, cx, cy, bw, bh);
+  ctx.fillStyle = grad; ctx.fill();
+  const shine = ctx.createRadialGradient(cx - bw * 0.22, cy - bh * 0.3, 0, cx - bw * 0.22, cy - bh * 0.3, bw * 0.35);
+  shine.addColorStop(0, "rgba(255,255,255,.45)"); shine.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = shine; ctx.fill();
+
+  // Eyes
+  const eyeR = bw * 0.12, eyeY = cy - bh * 0.17, eyeDX = bw * 0.17;
+  for (const side of [-1, 1]) {
+    const ex = cx + side * eyeDX + face.gx * bw * 0.02, ey = eyeY + face.gy * bh * 0.015;
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(ex, ey, eyeR, eyeR * 1.06, 0, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = "#fff"; ctx.fillRect(ex - eyeR, ey - eyeR * 1.1, eyeR * 2, eyeR * 2.2);
+    const pr = eyeR * (mood === "listening" ? 0.5 : 0.46);
+    const px = ex + face.gx * eyeR * 0.45, py = ey + face.gy * eyeR * 0.45;
+    ctx.fillStyle = "#17151F"; ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(px - pr * 0.35, py - pr * 0.4, pr * 0.28, 0, Math.PI * 2); ctx.fill();
+    // Lids (skin colour) from the top, happy squint from below
+    ctx.fillStyle = "#6C86F5";
+    if (lid > 0) ctx.fillRect(ex - eyeR, ey - eyeR * 1.1, eyeR * 2, eyeR * 2.2 * lid);
+    if (mood === "happy") { ctx.beginPath(); ctx.ellipse(ex, ey + eyeR * 1.25, eyeR * 1.2, eyeR * 0.75, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+    // Brow
+    ctx.strokeStyle = "rgba(28,31,102,.75)"; ctx.lineWidth = eyeR * 0.16; ctx.lineCap = "round";
+    const lift = mood === "thinking" ? 10 : mood === "happy" ? 6 : mood === "listening" ? 4 : 0;
+    const tilt = mood === "thinking" ? 0.18 * side : mood === "pointing" ? -0.12 * side : 0;
+    ctx.beginPath();
+    ctx.moveTo(ex - eyeR * 0.6, ey - eyeR * 1.35 - lift + tilt * eyeR);
+    ctx.lineTo(ex + eyeR * 0.6, ey - eyeR * 1.35 - lift - tilt * eyeR);
+    ctx.stroke();
+  }
+  // Cheeks
+  ctx.fillStyle = "rgba(255,154,208,.28)";
+  for (const side of [-1, 1]) { ctx.beginPath(); ctx.ellipse(cx + side * bw * 0.29, eyeY + eyeR * 1.5, eyeR * 0.55, eyeR * 0.3, 0, 0, Math.PI * 2); ctx.fill(); }
+  // Mouth
+  const my = eyeY + eyeR * 1.85, mw = eyeR * 0.75;
+  ctx.fillStyle = "#1C1F66"; ctx.strokeStyle = "#1C1F66"; ctx.lineWidth = eyeR * 0.14; ctx.lineCap = "round";
+  if (face.talk > 0.05) {
+    const open = eyeR * (0.2 + face.talk * 0.6 * (0.6 + 0.4 * Math.sin(t / 60)));
+    ctx.beginPath(); ctx.ellipse(cx, my, mw * 0.7, open, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (mood === "sleepy" || mood === "resting") {
+    ctx.beginPath(); ctx.moveTo(cx - mw * 0.4, my); ctx.lineTo(cx + mw * 0.4, my); ctx.stroke();
+  } else if (mood === "thinking") {
+    ctx.beginPath(); ctx.arc(cx + mw * 0.3, my, mw * 0.18, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(cx, my - mw * 0.35, mw * (mood === "happy" ? 0.8 : 0.6), 0.2 * Math.PI, 0.8 * Math.PI); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Focus card countdown ticks along with the face
+  tickFocusClock();
+}
+
+function focusRemaining() {
+  const f = S.focus && S.focus.current;
+  if (!f) return 0;
+  let elapsed = f.elapsed || 0;
+  if (f.status === "running") {
+    const rate = f.developerMode ? 4 : 1;
+    elapsed += ((performance.now() - S.focusAt) / 1000) * rate;
+  }
+  return Math.max(0, (f.duration || 0) - elapsed);
+}
+function tickFocusClock() { const c = $("#focusClock"); if (c) c.textContent = clock(focusRemaining()); }
+
+async function focusCommand(command, extra = {}) {
+  try {
+    const res = await postJSON("/api/focus", { command, ...extra });
+    if (res && res.message) toast(res.message);
+    loadFocus();
+  } catch (e) { toast(e.message); }
+}
+
+function renderFocusCard() {
+  const card = $("#focusCard");
+  if (card.contains(document.activeElement) && document.activeElement.matches("input")) return;
+  const f = S.focus && S.focus.current;
+  card.replaceChildren();
+  if (f && f.status !== "ended") {
+    card.append(
+      el("div", { class: "label" }, f.status === "running" ? "Bluey schaut mit" : "Pausiert"),
+      el("div", { class: "task" }, f.task),
+      el("div", { class: "clock", id: "focusClock" }, clock(focusRemaining())),
+      el("div", { class: "muted", style: "font-size:13px" }, f.detail || ""),
+      el("div", { class: "row" },
+        f.status === "running" ? el("button", { class: "btn", onclick: () => focusCommand("focusPause") }, "Pause")
+                               : el("button", { class: "btn primary", onclick: () => focusCommand("focusResume") }, "Weiter"),
+        el("button", { class: "btn danger", onclick: () => focusCommand("focusEnd") }, "Beenden")));
+  } else {
+    const task = el("input", { class: "input", placeholder: "Woran arbeitest du?" });
+    const minutes = el("input", { class: "input", type: "number", min: "1", max: "240", value: "30", style: "width:90px" });
+    const start = () => { const t = task.value.trim(); if (!t) { task.focus(); return; } focusCommand("focusStart", { task: t, minutes: Number(minutes.value) || 30 }); };
+    task.addEventListener("keydown", e => { if (e.key === "Enter") start(); });
+    card.append(el("div", { class: "label" }, "Fokus mit Bluey"),
+      el("div", { class: "muted", style: "font-size:13px;margin-top:4px" }, "Bluey checkt alle 30 s deinen Mac-Bildschirm und stupst dich an, wenn du abschweifst."),
+      task, el("div", { class: "row", style: "align-items:center" }, minutes, el("span", { class: "muted" }, "min"), el("button", { class: "btn primary", onclick: start }, "Starten")));
+  }
+}
+
+function initFace() {
+  window.addEventListener("mousemove", e => {
+    const canvas = $("#faceCanvas");
+    const r = canvas.getBoundingClientRect();
+    if (!r.width) return;
+    face.mouse.x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2)));
+    face.mouse.y = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height * 0.55)) / (r.height / 2)));
+  });
+}
+
+// ---------- Boot ----------
+function boot() {
+  document.querySelectorAll(".bluey-slot").forEach(s => { s.innerHTML = blueySVG(Number(s.dataset.size) || 40); });
+  buildNav();
+  initChat(); initTodos(); initNotes(); initFace();
+  renderAll(); renderStats(); renderFocusCard();
+  show(S.section);
+  connectEvents();
+  refreshAll();
+  setInterval(() => { if (S.section === "pomodoro") tickPomodoro(); }, 250);
+  // When the tab comes back, catch up (EventSource may have missed things while asleep).
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshAll(); });
+}
+boot();
+</script>
+</body>
+</html>

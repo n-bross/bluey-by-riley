@@ -19,6 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var presence: Timer?
     /// The talk shortcut is being held (talking on the Mac).
     private var macTalkHeld = false
+    private let workspace = WorkspaceStore()
+    private lazy var web = WebServer(store: workspace)
+    private lazy var workspaceWindow = WorkspaceWindow(store: workspace)
 
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -31,9 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         overlay.onFace = { [weak self] face in
-            self?.server.send(face)
-            self?.avatarWindow.update(face)
-            if self?.settings.notchMode == true { self?.notch.face(face) }
+            guard let self else { return }
+            self.server.send(face)
+            self.web.send(face: face)
+            self.workspaceWindow.animator.receive(face, at: Date().timeIntervalSinceReferenceDate)
+            self.avatarWindow.update(face)
+            if self.settings.notchMode { self.notch.face(face) }
         }
         overlay.onLook = { [weak self] point in self?.avatarWindow.look(at: point) }
         if settings.showAvatarWindow { avatarWindow.show() }
@@ -59,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let data = try? JSONEncoder().encode(state), let text = String(data: data, encoding: .utf8) else { return }
             self?.server.broadcast(Packet(command: "focusState", text: text))
             self?.notch.update(focus: state.current, sync: state)
+            self?.web.sendFocus(state)
+            self?.workspaceWindow.model.currentFocus = state.current
+            self?.workspaceWindow.model.focusHistory = state.history
         }
         focus.onNudge = { [weak self] message, target in
             guard let self else { return }
@@ -86,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.openSettings() }
         }
         applyNotchMode()
+        startWorkspace()
         if CommandLine.arguments.contains("--pair") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.pairingPanel.show() }
         }
@@ -101,7 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         server.onRequest = { [weak self] packet, reply in
             guard let self else { return }
-            if packet.command?.hasPrefix("focus") == true {
+            if WorkspacePhoneLink.handles(packet.command) {
+                WorkspacePhoneLink.handle(packet, store: self.workspace, reply: reply)
+            } else if packet.command?.hasPrefix("focus") == true {
                 self.focus.heartbeat()
                 let args = packet.text.flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] } ?? [:]
                 var result = ""
@@ -110,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case "focusBreak": result = self.focus.takeBreak()
                 case "focusSkipBreak": result = self.focus.skipBreak()
                 case "focusPomodoro":
-                    if let json = args["pomodoro"] as? String, let s = try? JSONDecoder().decode(PomodoroSettings.self, from: Data(json.utf8)) {
+                    if let json = args["pomodoro"] as? String, let s = try? JSONDecoder().decode(PomodoroRhythm.self, from: Data(json.utf8)) {
                         result = self.focus.setPomodoro(s)
                     } else { result = "Couldn't read those Pomodoro settings." }
                 case "focusPause": result = self.focus.pause()
@@ -143,8 +155,87 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Todos, notes, chats and the pomodoro: shared with the phone, the web app and the Bluey window.
+    private func startWorkspace() {
+        workspace.chatContext = { [weak self] in
+            guard let session = self?.focus.current, session.status != .ended else { return "" }
+            return "Laufende Bluey-Fokus-Session: \(session.task) (\(session.status.rawValue), noch \(Int(session.remaining / 60)) Min.)"
+        }
+        workspace.listen(snapshot: { [weak self] snapshot in
+            self?.server.broadcast(Packet(command: "wsState", text: WorkspaceCoding.string(snapshot)))
+        }, delta: { [weak self] delta in
+            self?.server.broadcast(Packet(command: "chatDelta", text: WorkspaceCoding.string(delta)))
+        })
+        workspace.onPomodoroChange = { [weak self] old, new in self?.pomodoroChanged(from: old, to: new) }
+        workspace.start()
+        web.focusState = { [weak self] in
+            guard let self else { return nil }
+            return FocusSync(current: self.focus.current, history: self.focus.history, revision: 0, developerMode: self.focus.developerMode)
+        }
+        web.focusCommand = { [weak self] command, args in self?.runFocusCommand(command, args) ?? "" }
+        web.start()
+        workspaceWindow.phoneName = { [weak self] in self?.server.phoneNames.first }
+        workspaceWindow.openWebApp = { [weak self] in self?.openWebApp() }
+        workspaceWindow.pairPhone = { [weak self] in self?.pairingPanel.show() }
+        workspaceWindow.model.focusCommand = { [weak self] command, task, minutes in
+            self?.runFocusCommand(command, ["task": task, "minutes": minutes]) ?? ""
+        }
+        workspaceWindow.model.currentFocus = focus.current
+        workspaceWindow.model.focusHistory = focus.history
+        if CommandLine.arguments.contains("--window") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.workspaceWindow.show() }
+        }
+    }
+
+    private func runFocusCommand(_ command: String, _ args: [String: Any]) -> String {
+        switch command {
+        case "focusStart": return focus.start(task: args["task"] as? String ?? "", minutes: args["minutes"] as? Double)
+        case "focusPause": return focus.pause()
+        case "focusResume": return focus.resume()
+        case "focusEnd": return focus.end()
+        default: return ""
+        }
+    }
+
+    /// Bluey cheers when a pomodoro phase ends and, if asked, watches the screen during focus phases.
+    private func pomodoroChanged(from old: PomodoroState?, to new: PomodoroState?) {
+        guard let new else { return }
+        let finishedNaturally = old.map { o in
+            o.isRunning && o.phase != new.phase &&
+                abs(new.updatedAt.timeIntervalSince(o.startedAt!.addingTimeInterval(o.pausedRemaining ?? o.duration))) < 0.01
+        } ?? false
+        if finishedNaturally, let old {
+            let line = old.phase == .focus ? "Runde geschafft! Zeit für eine kleine Pause." : "Pause vorbei. Bereit für die nächste Runde?"
+            host.showReply(line)
+            server.broadcast(Packet(command: "codexChirp", text: line))
+        }
+        guard new.settings.watchScreen || focus.hasSession else { return }
+        let focusing = new.phase == .focus
+        if focusing && new.isRunning && old?.phaseID != new.phaseID && new.settings.watchScreen {
+            if focus.hasSession { _ = focus.end() }
+            let label = new.label.isEmpty ? "Pomodoro-Fokus" : new.label
+            _ = focus.start(task: label, minutes: max(1, new.remaining(at: Date()) / 60))
+        } else if focusing && new.isPaused && old?.isRunning == true {
+            focus.pause("Pomodoro pausiert")
+        } else if focusing && new.isRunning && old?.isPaused == true {
+            _ = focus.resume()
+        } else if !focusing && old?.phase == .focus && focus.hasSession {
+            _ = focus.end()
+        }
+    }
+
+    @objc private func openWorkspace() { workspaceWindow.show() }
+
+    @objc private func openWebApp() { NSWorkspace.shared.open(web.url) }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        workspaceWindow.show()
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         notch.stop()
+        workspace.save()
         focus.shutdown()
         codex.shutdown()
     }
@@ -346,7 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let on = item("Pomodoro Breaks", #selector(togglePomodoro))
         on.state = p.enabled ? .on : .off
         menu.addItem(on)
-        for (index, preset) in PomodoroSettings.presets.enumerated() {
+        for (index, preset) in PomodoroRhythm.presets.enumerated() {
             let m = item(preset.name, #selector(setPomodoroPreset(_:)))
             m.tag = index
             m.state = p.enabled && p.sameRhythm(preset.settings) ? .on : .off
@@ -372,8 +463,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func takeBreak() { host.showReply(focus.takeBreak()) }
     @objc private func skipBreak() { host.showReply(focus.skipBreak()) }
     @objc private func setPomodoroPreset(_ item: NSMenuItem) {
-        guard PomodoroSettings.presets.indices.contains(item.tag) else { return }
-        var p = PomodoroSettings.presets[item.tag].settings
+        guard PomodoroRhythm.presets.indices.contains(item.tag) else { return }
+        var p = PomodoroRhythm.presets[item.tag].settings
         p.autoStartBreaks = focus.pomodoro.autoStartBreaks
         p.autoStartFocus = focus.pomodoro.autoStartFocus
         focus.setPomodoro(p)
@@ -536,6 +627,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let status = NSMenuItem(title: settings.hidden ? "Bluey is hidden" : where_, action: nil, keyEquivalent: "")
         status.isEnabled = false
         menu.addItem(status)
+        menu.addItem(.separator())
+        let open = NSMenuItem(title: "Bluey öffnen…", action: #selector(openWorkspace), keyEquivalent: "o")
+        open.keyEquivalentModifierMask = [.control, .option]
+        open.target = self
+        menu.addItem(open)
+        let webItem = NSMenuItem(title: "Web-App öffnen (\(web.url.host ?? "127.0.0.1"):\(web.port))", action: #selector(openWebApp), keyEquivalent: "")
+        webItem.target = self
+        menu.addItem(webItem)
         menu.addItem(.separator())
 
         // Focus and Pomodoro.

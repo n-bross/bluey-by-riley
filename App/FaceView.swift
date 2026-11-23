@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(GooglyShared)
+import GooglyShared
+#endif
 
 /// A tiny damped spring, so every part of the face moves with a little life.
 private struct Spring {

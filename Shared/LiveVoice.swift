@@ -64,7 +64,7 @@ public final class LiveVoice: NSObject, ObservableObject {
     }
 
     private var socket: URLSessionWebSocketTask?
-    private let engine = AVAudioEngine()
+    private var engine: AVAudioEngine { BlueyAudio.engine }
     private let player = AVAudioPlayerNode()
     private var converter: AVAudioConverter?
     private let wireFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 24000, channels: 1, interleaved: true)!
@@ -101,7 +101,7 @@ public final class LiveVoice: NSObject, ObservableObject {
     /// Wakes him. `microphone: false` (typing on the Mac) connects without touching the mic;
     /// the mic starts the first time you hold to talk.
     public func wake(microphone: Bool = true) {
-        guard state == .asleep else { return }
+        guard state == .asleep, !BlueyAudio.callActive else { return }
         wantAwake = true
         setState(.waking)
         guard microphone else {
@@ -229,7 +229,7 @@ public final class LiveVoice: NSObject, ObservableObject {
 
     /// The chirp on its own, for when he's asleep and the audio engine is off.
     public func chirpAlone() {
-        guard state == .asleep else { return }
+        guard state == .asleep, !BlueyAudio.callActive else { return }
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
@@ -241,7 +241,7 @@ public final class LiveVoice: NSObject, ObservableObject {
         player.play()
         chirp(syllables: 3)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let self, self.state == .asleep else { return }
+            guard let self, self.state == .asleep, !BlueyAudio.callActive else { return }
             self.player.stop()
             self.engine.stop()
         }
@@ -600,6 +600,8 @@ public final class LiveVoice: NSObject, ObservableObject {
     }
 
     private func stopAudio() {
+        // A running call owns the engine and the audio session.
+        guard !BlueyAudio.callActive else { player.stop(); return }
         micOn = false
         if audioReady { engine.inputNode.removeTap(onBus: 0) }
         player.stop()

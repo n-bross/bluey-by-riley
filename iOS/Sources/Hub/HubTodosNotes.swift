@@ -204,7 +204,7 @@ struct NotesView: View {
                 .refreshable { await hub.refreshNotes() }
             }
             .background(T3.screen.ignoresSafeArea())
-            .navigationDestination(item: $open) { note in NoteEditor(hub: hub, noteID: note.id) }
+            .navigationDestination(item: $open) { note in HubNoteEditor(hub: hub, noteID: note.id) }
             .toolbar(.hidden, for: .navigationBar)
         }
     }
@@ -215,7 +215,7 @@ extension HubNote: Hashable {
 }
 
 /// Plain-text editor that saves as you type (half a second after you stop).
-struct NoteEditor: View {
+struct HubNoteEditor: View {
     @ObservedObject var hub: HubClient
     let noteID: String
     @Environment(\.dismiss) private var dismiss
@@ -335,7 +335,7 @@ struct HubBrowserView: View {
             }
             T3Composer(text: $askText, running: result == "…", send: ask, stop: {})
             if let result, result != "…" {
-                ScrollView { MarkdownText(text: result) { current = $0; address = $0.absoluteString; asking = false } }
+                ScrollView { HubMarkdownText(text: result) { current = $0; address = $0.absoluteString; asking = false } }
             }
             Spacer()
         }

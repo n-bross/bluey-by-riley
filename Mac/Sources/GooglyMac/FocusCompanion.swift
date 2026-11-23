@@ -15,7 +15,7 @@ final class FocusCompanion {
     var onPomodoro: ((String) -> Void)?
 
     // MARK: Pomodoro state
-    private(set) var pomodoro = PomodoroSettings()
+    private(set) var pomodoro = PomodoroRhythm()
     /// The break in progress, if any. Breaks need no phone and no screen checks.
     private(set) var rest: PomodoroBreak?
     /// Focus rounds finished (by the timer) in the current cycle; a long break resets it.
@@ -67,7 +67,7 @@ final class FocusCompanion {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         file = historyFile ?? dir.appendingPathComponent("focus-history.json")
         history = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode([FocusSession].self, from: $0) } ?? []
-        if let data = settings?.data(forKey: "pomodoro"), let saved = try? JSONDecoder().decode(PomodoroSettings.self, from: data) {
+        if let data = settings?.data(forKey: "pomodoro"), let saved = try? JSONDecoder().decode(PomodoroRhythm.self, from: data) {
             pomodoro = saved.clamped()
         }
     }
@@ -334,7 +334,7 @@ final class FocusCompanion {
     }
 
     /// Changes the rhythm. Takes effect from the next round or break.
-    @discardableResult func setPomodoro(_ settings: PomodoroSettings) -> String {
+    @discardableResult func setPomodoro(_ settings: PomodoroRhythm) -> String {
         let clean = settings.clamped()
         pomodoro = clean
         if let data = try? JSONEncoder().encode(clean) { self.settings?.set(data, forKey: "pomodoro") }

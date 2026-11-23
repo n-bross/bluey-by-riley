@@ -87,20 +87,10 @@ extension View {
     }
 }
 
-/// Lets the app switch between landscape (Bluey's face) and portrait (the hub).
-final class OrientationLock: NSObject, UIApplicationDelegate {
-    static var mask: UIInterfaceOrientationMask = .landscape
-
-    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        Self.mask
-    }
-
+/// Hub screens run in portrait; the app-wide orientation lock is main's `OrientationDelegate`.
+enum OrientationLock {
     static func set(_ mask: UIInterfaceOrientationMask) {
-        self.mask = mask
-        for scene in UIApplication.shared.connectedScenes {
-            guard let scene = scene as? UIWindowScene else { continue }
-            scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
-        }
+        if mask == .landscape { OrientationDelegate.lock(.landscape, prefer: .landscapeRight) }
+        else { OrientationDelegate.lock(.allButUpsideDown, prefer: .portrait) }
     }
 }

@@ -8,12 +8,18 @@ settings:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.1"
     CURRENT_PROJECT_VERSION: "1"
+    # Your own signing: scripts/build-iphone.sh overrides these two (BLUEY_TEAM, BLUEY_BUNDLE_PREFIX).
+    BLUEY_BUNDLE_PREFIX: co.visionairy.googly
+    DEVELOPMENT_TEAM: NF73NSV867
+    CODE_SIGN_STYLE: Automatic
 targets:
   GooglyEyes:
     type: application
     platform: iOS
     sources:
       - path: iOS/Sources
+      - path: iOS/Common
+      - path: App
       - path: Shared
       - path: vendor/keramik-avatar/keramik-avatar.js
         buildPhase: resources
@@ -21,27 +27,42 @@ targets:
         buildPhase: resources
       - path: vendor/keramik-3d/keramik-3d.js
         buildPhase: resources
+    dependencies:
+      - target: BlueyWidgets
+      - target: BlueyBroadcast
+    entitlements:
+      path: iOS/Bluey.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.$(BLUEY_BUNDLE_PREFIX)
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: co.visionairy.googly.phone
+        PRODUCT_BUNDLE_IDENTIFIER: $(BLUEY_BUNDLE_PREFIX).phone
         PRODUCT_NAME: Bluey
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: NF73NSV867
-        # Set your team in Xcode (Signing & Capabilities) the first time you run it.
     info:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Bluey
         UILaunchScreen: {}
         UIRequiresFullScreen: true
-        UIStatusBarHidden: true
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-          - UIInterfaceOrientationPortrait
+        # Calls keep talking while you switch apps to show Bluey something.
+        UIBackgroundModes:
+          - audio
+        NSSupportsLiveActivities: true
+        BlueyAppGroup: group.$(BLUEY_BUNDLE_PREFIX)
+        BlueyBroadcastExtension: $(BLUEY_BUNDLE_PREFIX).phone.broadcast
+        CFBundleURLTypes:
+          - CFBundleURLName: bluey
+            CFBundleURLSchemes:
+              - bluey
+        NSPhotoLibraryUsageDescription: Bluey hängt Fotos an, wenn du sie im Chat auswählst.
         NSLocalNetworkUsageDescription: Bluey finds the Mac app on your Wi-Fi so the character can look where it points.
         NSCameraUsageDescription: Bluey scans a private pairing code on your Mac to securely connect.
         NSMicrophoneUsageDescription: Talk to your blueberry. He listens while he's awake (double tap him to wake him up or put him to sleep).
@@ -57,3 +78,56 @@ targets:
           - DMSans-Regular.ttf
           - DMSans-Medium.ttf
           - DMSans-Bold.ttf
+
+  # Live Activity on the Lock Screen and in the Dynamic Island ("Bluey fragen", call status).
+  BlueyWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: iOS/Widgets
+      - path: iOS/Common
+      - path: Shared/Palette.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BLUEY_BUNDLE_PREFIX).phone.widgets
+        PRODUCT_NAME: BlueyWidgets
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+    info:
+      path: iOS/Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Bluey
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  # Screen sharing during calls: ReplayKit hands the screen to this extension, which leaves the
+  # latest frame in the shared app group for Bluey to look at.
+  BlueyBroadcast:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: iOS/Broadcast
+    entitlements:
+      path: iOS/Broadcast/BlueyBroadcast.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.$(BLUEY_BUNDLE_PREFIX)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BLUEY_BUNDLE_PREFIX).phone.broadcast
+        PRODUCT_NAME: BlueyBroadcast
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+    info:
+      path: iOS/Broadcast/Info.plist
+      properties:
+        CFBundleDisplayName: Bluey
+        BlueyAppGroup: group.$(BLUEY_BUNDLE_PREFIX)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer

@@ -10,10 +10,14 @@ let package = Package(
     ],
     targets: [
         .target(name: "GooglyShared", path: "Shared", exclude: ["Fonts"]),
+        // The Mac app also compiles the SwiftUI workspace screens in App/, shared with the iPhone.
         .executableTarget(
             name: "GooglyMac",
             dependencies: ["GooglyShared"],
-            path: "Mac/Sources/GooglyMac"
+            path: ".",
+            exclude: ["iOS", "Shared", "Tests", "docs", "scripts", "Web", "Mac/Info.plist", "README.md", "LICENSE",
+                      "project.yml", "GooglyEyes.xcodeproj"],
+            sources: ["Mac/Sources/GooglyMac", "App"]
         ),
         .testTarget(name: "GooglyMacTests", dependencies: ["GooglyMac", "GooglyShared"], path: "Tests/GooglyMacTests"),
         .testTarget(name: "GooglySharedTests", dependencies: ["GooglyShared"], path: "Tests/GooglySharedTests"),

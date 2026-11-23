@@ -381,7 +381,7 @@ private struct PomodoroSettingsView: View {
             if p.enabled {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
-                        ForEach(PomodoroSettings.presets, id: \.name) { preset in
+                        ForEach(PomodoroRhythm.presets, id: \.name) { preset in
                             Button(preset.name) {
                                 var s = preset.settings
                                 s.autoStartBreaks = p.autoStartBreaks; s.autoStartFocus = p.autoStartFocus
@@ -408,11 +408,11 @@ private struct PomodoroSettingsView: View {
         .padding(16).background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func binding(_ key: WritableKeyPath<PomodoroSettings, Bool>) -> Binding<Bool> {
+    private func binding(_ key: WritableKeyPath<PomodoroRhythm, Bool>) -> Binding<Bool> {
         Binding(get: { focus.pomodoro[keyPath: key] }, set: { var s = focus.pomodoro; s[keyPath: key] = $0; focus.setPomodoro(s) })
     }
 
-    private func number(_ key: WritableKeyPath<PomodoroSettings, Double>) -> Binding<Double> {
+    private func number(_ key: WritableKeyPath<PomodoroRhythm, Double>) -> Binding<Double> {
         Binding(get: { focus.pomodoro[keyPath: key] }, set: { var s = focus.pomodoro; s[keyPath: key] = $0; focus.setPomodoro(s) })
     }
 }

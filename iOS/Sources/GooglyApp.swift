@@ -5,35 +5,291 @@ import UIKit
 
 @main
 struct GooglyApp: App {
-    @UIApplicationDelegateAdaptor(OrientationLock.self) private var orientation
+    @UIApplicationDelegateAdaptor(OrientationDelegate.self) private var orientation
     var body: some Scene {
         WindowGroup {
-            RootView()
+            AppShell()
         }
     }
 }
 
-struct RootView: View {
+/// Lets the face screen lock landscape while the rest of the app turns freely.
+final class OrientationDelegate: NSObject, UIApplicationDelegate {
+    static var mask: UIInterfaceOrientationMask = .allButUpsideDown
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Self.mask
+    }
+
+    static func lock(_ mask: UIInterfaceOrientationMask, prefer: UIInterfaceOrientationMask) {
+        Self.mask = mask
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: prefer)) { _ in }
+        }
+    }
+}
+
+/// The Bluey app on the iPhone: the workspace tabs, with his face one tap away.
+/// Owns the Mac link, voice, focus and workspace so they keep running whichever screen is showing.
+struct AppShell: View {
     @StateObject private var link = MacLink()
     @StateObject private var live = LiveVoice()
     @StateObject private var store = SessionStore()
     @StateObject private var focus = FocusClient()
+    @StateObject private var call = CallSession()
+    @State private var showCall = false
+    @State private var workspace: PhoneWorkspace?
+    @State private var animator = FaceAnimator()
+    @State private var showFace = false
+    @State private var showFocus = false
+    @State private var scanPairing = false
+    @State private var showSettings = false
+    @AppStorage("workspaceTab") private var tabRaw = WorkspaceTab.chat.rawValue
     @StateObject private var hermes = HermesClient()
     @State private var showHermes = false
     @StateObject private var hub = HubClient()
     @State private var showHub = false
-    @State private var showFocus = false
-    @State private var scanPairing = false
-    @State private var showApp = false
+    @State private var testingAvatar = false
     @Environment(\.scenePhase) private var scenePhase
-    @State private var animator = FaceAnimator()
+
+    var body: some View {
+        Group {
+            if let workspace {
+                WorkspaceRootView(
+                    model: workspace.model,
+                    tab: Binding(get: { WorkspaceTab(rawValue: tabRaw) ?? .chat }, set: { tabRaw = $0.rawValue }),
+                    connectionName: link.macName ?? link.currentMac,
+                    face: { Color.black },
+                    settings: { settings },
+                    showSettings: $showSettings,
+                    openFace: { showFace = true })
+            } else {
+                Color.black
+            }
+        }
+        .fullScreenCover(isPresented: $showCall) {
+            CallView(call: call) { showCall = false; call.reset() }
+        }
+        .onOpenURL { url in
+            guard url.scheme == "bluey" else { return }
+            switch url.host {
+            case "call":
+                // From the Live Activity: open a call (or the running one).
+                showFace = false
+                startCall(threadID: nil)
+            case "pomodoro":
+                showFace = false; showSettings = false
+                tabRaw = WorkspaceTab.pomodoro.rawValue
+            default:
+                break
+            }
+        }
+        .fullScreenCover(isPresented: $showFace) {
+            FaceScreen(link: link, live: live, focus: focus, hermes: hermes, animator: animator,
+                       showFocus: $showFocus, scanPairing: $scanPairing, testingAvatar: $testingAvatar,
+                       openHermes: { showFace = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showHermes = true } },
+                       openHub: { showFace = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showHub = true } },
+                       close: { showFace = false })
+        }
+        // Hermes (through the Mac) and the hub (chats, todos and notes without the Mac).
+        .fullScreenCover(isPresented: $showHermes) { HermesView(hermes: hermes, link: link) }
+        .fullScreenCover(isPresented: $showHub, onDismiss: { OrientationLock.set(.portrait) }) {
+            HubRootView(hub: hub) { showHub = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showFace = true } }
+        }
+        // While his face is up, it presents these itself.
+        .sheet(isPresented: Binding(get: { scanPairing && !showFace }, set: { scanPairing = $0 })) { QRPairingView(link: link) }
+        .sheet(isPresented: Binding(get: { showFocus && !showFace }, set: { showFocus = $0 })) { FocusDashboard(focus: focus, link: link) }
+        .onAppear(perform: start)
+        .onChange(of: link.connected) { _, connected in
+            focus.connectionChanged(connected)
+            workspace?.connectionChanged(connected)
+            if !connected { live.sleep() }
+            if connected {
+                hermes.sync()
+                NotesSync.retryPending(store: store, link: link)
+                store.resyncRecent()
+            }
+        }
+        .onChange(of: live.state) { old, new in
+            // Waking him (here or with ⌥Space on the Mac) brings up his face.
+            if old == .asleep, new != .asleep, !showFace { showSettings = false; showFace = true }
+        }
+        .onChange(of: focus.history.count) { _, _ in workspace?.model.focusHistory = focus.history }
+        .onChange(of: focus.current) { _, current in workspace?.model.currentFocus = current }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                link.start()
+                if !call.isActive { BlueyLiveActivity.endAll() }
+            } else {
+                // Leaving the app: Bluey waits on the Lock Screen and in the Dynamic Island.
+                // A running pomodoro has its own Live Activity; one is enough.
+                if !call.isActive, !PomodoroLiveActivity.isShowing { BlueyLiveActivity.show(.ready) }
+                // A call keeps running (voice, screen sharing and the Mac link) while you're in other apps.
+                guard !call.isActive else { return }
+                focus.command("focusPause")
+                live.sleep()
+                if phase == .background { link.stop() }
+            }
+        }
+    }
+
+    private var settings: some View {
+        BlueyAppView(store: store, live: live, link: link, focus: focus,
+                     openHermes: { showSettingsThen { showHermes = true } },
+                     openHub: { showSettingsThen { showHub = true } },
+                     openFocus: { showSettingsThen { showFocus = true } },
+                     pairMac: { showSettingsThen { scanPairing = true } },
+                     testAvatar: { showSettingsThen { testingAvatar = true; showFace = true } }) { showSettings = false }
+    }
+
+    private func showSettingsThen(_ action: @escaping () -> Void) {
+        showSettings = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: action)
+    }
+
+    /// Opens the call screen and starts a call for a chat (or shows the call that's already running).
+    private func startCall(threadID: UUID?) {
+        showCall = true
+        guard !call.isActive else { return }
+        if live.state != .asleep { live.sleep() }
+        let context = workspace?.model.thread(threadID).map { thread in
+            thread.messages.suffix(12).map { ($0.role == .user ? "User: " : "Bluey: ") + $0.text.prefix(600) }.joined(separator: "\n")
+        }
+        call.start(threadID: threadID, context: context)
+    }
+
+    private func wireCall(workspace: PhoneWorkspace) {
+        call.requestToken = { [link] context, done in
+            link.request(Packet(command: "callToken", text: context)) { reply in done(reply?.text) }
+        }
+        call.runTool = { [link] name, arguments, done in
+            link.request(Packet(command: "tool", tool: name, text: arguments)) { reply in
+                done(reply?.text ?? "The Mac didn't answer.", reply?.image)
+            }
+        }
+        call.onChange = { [call] in BlueyLiveActivity.update(from: call) }
+        call.onEnded = { [weak model = workspace.model, call] threadID, lines in
+            model?.appendCall(threadID: threadID, lines: lines.map { ($0.fromUser, $0.text) }, started: call.startedAt ?? Date())
+            BlueyLiveActivity.endAll()
+        }
+        workspace.model.startCall = { threadID in startCall(threadID: threadID) }
+    }
+
+    private func start() {
+        guard workspace == nil else { return }
+        let workspace = PhoneWorkspace(link: link)
+        wireCall(workspace: workspace)
+        workspace.model.focusHistory = focus.history
+        workspace.model.focusCommand = { [focus] command, task, minutes in
+            focus.command(command, task: task, minutes: minutes)
+            return ""
+        }
+        workspace.model.onPomodoro = { [weak model = workspace.model] in
+            if let model { PomodoroLiveActivity.update(from: model.snapshot) }
+        }
+        PomodoroLiveActivity.update(from: workspace.model.snapshot)
+        self.workspace = workspace
+        focus.attach(link)
+        hermes.attach(link)
+        focus.onFinished = { showFocus = true; live.sleep() }
+        link.onFocusState = { [focus] in focus.receive($0) }
+        link.onFace = { [animator] face in animator.receive(face, at: Date().timeIntervalSinceReferenceDate) }
+        animator.localTalk = { [live] in live.level }
+        wireLiveVoice(workspace: workspace)
+        link.start()
+    }
+
+    /// Connects the live voice to the Mac: keys, tools, captions and wake/sleep.
+    private func wireLiveVoice(workspace: PhoneWorkspace) {
+        live.requestToken = { [link] done in
+            link.request(Packet(command: "realtimeToken")) { reply in done(reply?.text) }
+        }
+        live.runTool = { [link] name, arguments, done in
+            link.request(Packet(command: "tool", tool: name, text: arguments)) { reply in
+                done(reply?.text ?? "The Mac didn't answer.", reply?.image)
+            }
+        }
+        live.onSessionStart = { [store] in store.start() }
+        live.resumeContext = { [store] in store.recentText() }
+        live.recorder.onChunk = { [store, link] chunk in
+            store.addPending(chunk.sessionID, index: chunk.index, started: chunk.started)
+            NotesSync.upload(chunk.sessionID, index: chunk.index, started: chunk.started, store: store, link: link)
+        }
+        store.onSync = { [store, link] sessions in NotesSync.send(sessions, store: store, link: link) }
+        live.onSessionEnd = { [store] in store.end() }
+        live.onUserTurn = { [store] item, asked in store.placeholder(itemID: item, asked: asked) }
+        live.onUserWords = { [store] item, text, asked in store.heard(itemID: item, text: text, asked: asked) }
+        live.onReply = { [store] text in store.reply(text) }
+        live.onReport = { [store] text in store.report(text) }
+        live.onCaption = { [link] text, finished in
+            link.send(Packet(command: finished ? "captionDone" : "caption", text: text))
+        }
+        live.onStateChange = { [link, animator] state in
+            switch state {
+            case .asleep:
+                animator.awake = false
+                animator.localMood = nil
+                link.send(Packet(command: "asleep"))
+            case .waking:
+                animator.awake = true
+                animator.localMood = .happy
+            case .listening:
+                animator.awake = true
+                animator.localMood = nil
+                link.send(Packet(command: "awake"))
+            case .asking:
+                animator.awake = true
+                animator.localMood = .listening  // all ears while you hold
+                link.send(Packet(command: "awake"))
+            case .thinking:
+                animator.localMood = .thinking
+            case .speaking:
+                animator.localMood = .talking
+            }
+        }
+        live.onCodexNote = { [store] text in store.codex(text) }
+        link.onCommand = { [live, focus, workspace, hermes, hub] command, text in
+            if workspace.receive(command: command, text: text) { return }
+            switch command {
+            case "hermesState": hermes.receive(text ?? "")
+            case "hermesChirp": live.focusChirp()
+            case "hubConfig":
+                // The paired Mac shares where the hub is (over the encrypted link).
+                if let data = text?.data(using: .utf8), let config = try? JSONDecoder().decode(HubConfig.self, from: data) {
+                    hub.configure(config)
+                }
+            case "wake": live.wake()
+            case "sleep": live.sleep()
+            case "codexNote": live.codexNote(text ?? "")
+            case "codexChirp": live.chirpAlone()
+            case "focusChirp":
+                focus.receivedNudge(text ?? "Are you sure you're on task right now?")
+                live.focusChirp()
+            default: break
+            }
+        }
+    }
+}
+
+/// His face, full screen and sideways under the Mac monitor: eyes follow your mouse, hold to talk.
+struct FaceScreen: View {
+    @ObservedObject var link: MacLink
+    @ObservedObject var live: LiveVoice
+    @ObservedObject var focus: FocusClient
+    @ObservedObject var hermes: HermesClient
+    let animator: FaceAnimator
+    @Binding var showFocus: Bool
+    @Binding var scanPairing: Bool
+    @Binding var testingAvatar: Bool
+    var openHermes: () -> Void
+    var openHub: () -> Void
+    var close: () -> Void
+    @AppStorage(AvatarStyle.defaultsKey) private var avatar: AvatarStyle = .keramik3D
+    @State private var avatarReaction: KeramikReaction?
+    @State private var testMood: String?
     @State private var showPairing = true
     @State private var holdStart: DispatchWorkItem?
     @State private var holdingToAsk = false
-    @AppStorage(AvatarStyle.defaultsKey) private var avatar: AvatarStyle = .keramik3D
-    @State private var avatarReaction: KeramikReaction?
-    @State private var testingAvatar = false
-    @State private var testMood: String?
 
     var body: some View {
         ZStack {
@@ -62,8 +318,8 @@ struct RootView: View {
             FocusFaceHUD(focus: focus, link: link, live: live, open: { showFocus = true }, pair: { scanPairing = true })
             SoundButton(link: link, live: live)
 
-            // Bluey's app: sessions, transcripts and settings.
-            Button { showApp = true } label: {
+            // Back to the app: chat, todos, notes, pomodoro and statistics.
+            Button(action: close) {
                 Image(systemName: "square.grid.2x2.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.35))
@@ -71,13 +327,13 @@ struct RootView: View {
                     .background(Circle().fill(Color.white.opacity(0.06)).frame(width: 34, height: 34))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open Bluey")
+            .accessibilityLabel("Zurück zur App")
             .padding(.top, 10)
             .padding(.trailing, 62)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
 
             // Hermes: turns yellow while Hermes waits for an approval or an answer.
-            Button { showHermes = true } label: {
+            Button(action: openHermes) {
                 let waiting = !hermes.waiting.isEmpty
                 Image(systemName: waiting ? "exclamationmark.bubble.fill" : "sparkles")
                     .font(.system(size: 14, weight: .semibold))
@@ -93,50 +349,32 @@ struct RootView: View {
 
             if showPairing && !link.connected {
                 PairingView(onPlay: { withAnimation(.easeOut(duration: 0.3)) { showPairing = false; scanPairing = true } },
-                            openHub: { showHub = true })
+                            openHub: openHub)
                     .transition(.opacity)
             }
         }
         .background(Color.black)
         .ignoresSafeArea()
-        .phoneChrome()
-        .fullScreenCover(isPresented: $showApp) {
-            BlueyAppView(store: store, live: live, link: link, focus: focus, openHermes: { showApp = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showHermes = true } }, openHub: { showApp = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showHub = true } }, openFocus: { showApp = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showFocus = true } }, pairMac: { showApp = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { scanPairing = true } }, testAvatar: { showApp = false; testingAvatar = true }) { showApp = false }
-        }
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
         .sheet(isPresented: $showFocus) { FocusDashboard(focus: focus, link: link) }
-        .fullScreenCover(isPresented: $showHub, onDismiss: { OrientationLock.set(.landscape) }) {
-            HubRootView(hub: hub) { showHub = false }
-        }
-        .fullScreenCover(isPresented: $showHermes) { HermesView(hermes: hermes, link: link) }
         .sheet(isPresented: $scanPairing) { QRPairingView(link: link) }
         .onAppear {
-            focus.attach(link)
-            hermes.attach(link)
-            focus.onFinished = { showFocus = true; live.sleep(); react("confetti") }
-            link.onFocusState = { [focus] in focus.receive($0) }
-            link.onFace = { [animator] face in animator.receive(face, at: Date().timeIntervalSinceReferenceDate) }
-            animator.localTalk = { [live] in live.level }
-            wireLiveVoice()
-            link.start()
+            UIApplication.shared.isIdleTimerDisabled = true
+            OrientationDelegate.lock(.landscape, prefer: .landscapeRight)
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            OrientationDelegate.lock(.allButUpsideDown, prefer: .portrait)
         }
         .onChange(of: link.connected) { _, connected in
-            focus.connectionChanged(connected)
-            if !connected { live.sleep() }
-            if connected {
-                withAnimation(.easeOut(duration: 0.4)) { showPairing = false }
-                NotesSync.retryPending(store: store, link: link)
-                hermes.sync()
-                store.resyncRecent()
-            }
+            if connected { withAnimation(.easeOut(duration: 0.4)) { showPairing = false } }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { link.start() }
-            else {
-                focus.command("focusPause")
-                live.sleep()
-                if phase == .background { link.stop() }
-            }
-        }
+        .onChange(of: focus.history.count) { old, new in if new > old { react("confetti") } }
+    }
+
+    private func react(_ name: String) {
+        avatarReaction = KeramikReaction(name, id: (avatarReaction?.id ?? 0) + 1)
     }
 
     /// Press and hold the screen to ask him something; let go and he answers.
@@ -146,9 +384,7 @@ struct RootView: View {
                 guard holdStart == nil, !holdingToAsk else { return }
                 let work = DispatchWorkItem {
                     holdingToAsk = true
-                    #if canImport(UIKit)
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    #endif
                     live.beginAsk()
                 }
                 holdStart = work
@@ -159,92 +395,10 @@ struct RootView: View {
                 holdStart = nil
                 if holdingToAsk {
                     holdingToAsk = false
-                    #if canImport(UIKit)
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    #endif
                     live.endAsk()
                 }
             }
-    }
-
-    /// Plays one of the Keramik avatar's reactions (ignored by Bluey's own face).
-    private func react(_ name: String) {
-        avatarReaction = KeramikReaction(name, id: (avatarReaction?.id ?? 0) + 1)
-    }
-
-    /// Connects the live voice to the Mac: keys, tools, captions and wake/sleep.
-    private func wireLiveVoice() {
-        live.requestToken = { [link] done in
-            link.request(Packet(command: "realtimeToken")) { reply in done(reply?.text) }
-        }
-        live.runTool = { [link] name, arguments, done in
-            link.request(Packet(command: "tool", tool: name, text: arguments)) { reply in
-                done(reply?.text ?? "The Mac didn't answer.", reply?.image)
-            }
-        }
-        live.onSessionStart = { [store] in
-            // Focus voice is ephemeral. Do not record meeting audio by default.
-            store.start()
-        }
-        live.resumeContext = { [store] in store.recentText() }
-        live.recorder.onChunk = { [store, link] chunk in
-            store.addPending(chunk.sessionID, index: chunk.index, started: chunk.started)
-            NotesSync.upload(chunk.sessionID, index: chunk.index, started: chunk.started, store: store, link: link)
-        }
-        store.onSync = { [store, link] sessions in NotesSync.send(sessions, store: store, link: link) }
-        live.onSessionEnd = { [store] in store.end() }
-        live.onUserTurn = { [store] item, asked in store.placeholder(itemID: item, asked: asked) }
-        live.onUserWords = { [store] item, text, asked in store.heard(itemID: item, text: text, asked: asked) }
-        live.onReply = { [store] text in store.reply(text) }
-        live.onReport = { [store] text in store.report(text) }
-        live.onCaption = { [link] text, finished in
-            link.send(Packet(command: finished ? "captionDone" : "caption", text: text))
-        }
-        live.onStateChange = { [link, animator] state in
-            switch state {
-            case .asleep:
-                animator.awake = false
-                animator.localMood = nil
-                link.send(Packet(command: "asleep"))
-            case .waking:
-                animator.awake = true
-                animator.localMood = .happy
-                react("wave")
-            case .listening:
-                animator.awake = true
-                animator.localMood = nil
-                link.send(Packet(command: "awake"))
-            case .asking:
-                animator.awake = true
-                animator.localMood = .listening  // all ears while you hold
-                link.send(Packet(command: "awake"))
-            case .thinking:
-                animator.localMood = .thinking
-            case .speaking:
-                animator.localMood = .talking
-            }
-        }
-        live.onCodexNote = { [store] text in store.codex(text) }
-        link.onCommand = { [live, focus, hermes] command, text in
-            switch command {
-            case "hermesState": hermes.receive(text ?? "")
-            case "hubConfig":
-                // The paired Mac shares where the hub is and its key (over the encrypted link).
-                if let data = text?.data(using: .utf8), let config = try? JSONDecoder().decode(HubConfig.self, from: data) {
-                    hub.configure(config)
-                }
-            case "hermesChirp": live.focusChirp()
-            case "wake": live.wake()
-            case "sleep": live.sleep()
-            case "codexNote": live.codexNote(text ?? "")
-            case "codexChirp": live.chirpAlone()
-            case "focusChirp":
-                focus.receivedNudge(text ?? "Are you sure you're on task right now?")
-                live.focusChirp()
-                react("stop")
-            default: break
-            }
-        }
     }
 }
 
@@ -352,9 +506,7 @@ struct ModeIndicator: View {
         }
     }
     private static let screenCornerRadius: CGFloat = {
-        #if canImport(UIKit)
         if let radius = UIScreen.main.value(forKey: "_displayCornerRadius") as? CGFloat, radius > 0 { return radius }
-        #endif
         return 55
     }()
     var body: some View {
@@ -368,19 +520,5 @@ struct ModeIndicator: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .animation(.easeInOut(duration: 0.25), value: state)
-    }
-}
-
-private extension View {
-    /// Hides the status bar and home indicator and keeps the screen awake.
-    func phoneChrome() -> some View {
-        #if os(iOS)
-        return self
-            .statusBarHidden(true)
-            .persistentSystemOverlays(.hidden)
-            .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        #else
-        return self
-        #endif
     }
 }

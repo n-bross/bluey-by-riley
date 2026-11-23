@@ -14,6 +14,21 @@ The task appears at the phone's top left, with a large white countdown at bottom
 
 **Developer Mode:** turn it on at the top of **Focus** on the phone or in Bluey's Mac menu. The countdown runs **4× faster**, and the Mac checks the screen every **10 real seconds**. Repeated majority off-task choices nudge after two or three checks (about **20–30 real seconds**, plus request time); cooldown is 30 real seconds. **Test a nudge** checks the Mac bubble and phone chirp immediately without taking a screenshot. Changes take effect immediately on both devices, including during a session. Test sessions are labelled in history with their real active time, and the setting is remembered on the Mac. A fresh installation defaults to normal speed. Turning it off restores the real-time clock, 30-second checks and two-to-four-minute evidence span. Pause, lock and disconnect still stop capture normally.
 
+## The Bluey app: chat, todos, notes, pomodoro, stats
+
+The same app runs on iPhone, Mac and in the browser. Tabs: **Chat**, **Todos**, **Notizen**, **Pomodoro**, **Statistik**, and **Gesicht** (his face).
+
+- **iPhone:** opens on the tabs. **Gesicht** switches to the familiar sideways face, synced with the Mac. The grid button goes back. Waking him (double tap, or ⌥Space on the Mac) brings the face up. Todos, notes and the pomodoro also work offline and sync once the Mac is reachable.
+- **Mac:** **Bluey öffnen…** (⌃⌥O) in the menu opens a window with a sidebar. While it is open, Bluey has a Dock icon. `--window` opens it at launch.
+- **Web:** **Web-App öffnen** in the menu opens `http://127.0.0.1:4777` with a private token link. It is reachable only from this Mac. The token is stored as a cookie and kept in `~/Library/Application Support/Googly/web-token`.
+- **Chat:** OpenAI Responses with streaming. Attach images, PDFs and text files (up to 10 MB). Pick a model from the models available to your key. **Web** turns on web search. The key stays on the Mac; phone and browser ask the Mac to chat for them.
+- **Pomodoro:** focus and break phases, linkable to a todo. With **Bluey schaut mit**, every focus phase also starts a Bluey focus session with screen checks.
+- **Sync:** the Mac holds the source copy (`~/Library/Application Support/Googly/workspace.json`, attachments next to it). Every item carries `updatedAt`, and the newest version wins. Deletions sync as tombstones.
+
+Shared SwiftUI screens live in `App/` (compiled into both apps), the data model in `Shared/Workspace.swift`, and the web app in `Web/index.html`.
+
+For development next to a running Bluey: `swift run GooglyMac --workspace-preview` opens only the window and the web app (port 4787) with throwaway data.
+
 ## Settings, shortcuts and look
 
 **Settings…** (⌘, in Bluey's menu) has everything in one window: *General* (notch, floating Keramik avatar, pointer style and size, computer control, phone position), *Shortcuts*, *Focus* (Pomodoro presets, times, cycle preview, auto-start, Developer Mode), *Hermes* (connection, risky-step approvals, ActivityWatch) and *Account* (OpenAI key, personality). The menu itself only keeps what you use day to day.

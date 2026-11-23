@@ -18,7 +18,7 @@ final class NotchModel: ObservableObject {
     @Published var heard = ""
     @Published var focus: FocusSession?
     @Published var rest: PomodoroBreak?
-    @Published var pomodoro = PomodoroSettings()
+    @Published var pomodoro = PomodoroRhythm()
     @Published var completedRounds = 0
     @Published var showSettings = false
     /// Bumped to put the cursor in the text field (the type shortcut).
@@ -61,7 +61,7 @@ final class NotchModel: ObservableObject {
     var focusAction: ((String) -> Void)?
     var respondHermes: ((String, String, String) -> Void)?
     var sleepVoice: (() -> Void)?
-    var setPomodoro: ((PomodoroSettings) -> Void)?
+    var setPomodoro: ((PomodoroRhythm) -> Void)?
     var openSettings: (() -> Void)?
     var close: (() -> Void)?
 
@@ -485,13 +485,7 @@ final class NotchController {
 
 // MARK: - SwiftUI
 
-private extension Color {
-    init(hex: UInt32) { self.init(nsColor: NSColor(hex: hex)) }
-}
-
-private extension Font {
-    static func fredoka(_ size: CGFloat) -> Font { .custom("Fredoka", size: size) }
-}
+// Color(hex:) and Font.fredoka come from App/BlobShape.swift (shared with the phone).
 
 /// The notch's own shape: square top (it merges into the bezel), rounded bottom corners.
 private struct NotchShape: Shape {
@@ -765,8 +759,8 @@ struct NotchView: View {
 
 /// Pomodoro in the notch, kept simple: on/off and the rhythm as chips. Everything else is in Settings.
 struct PomodoroControls: View {
-    let settings: PomodoroSettings
-    let change: (PomodoroSettings) -> Void
+    let settings: PomodoroRhythm
+    let change: (PomodoroRhythm) -> Void
     var openSettings: () -> Void = {}
 
     var body: some View {
@@ -775,7 +769,7 @@ struct PomodoroControls: View {
                 .toggleStyle(.switch).controlSize(.mini).labelsHidden()
             Text("Pomodoro").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
             Spacer(minLength: 4)
-            ForEach(PomodoroSettings.presets, id: \.name) { preset in
+            ForEach(PomodoroRhythm.presets, id: \.name) { preset in
                 let on = settings.enabled && settings.sameRhythm(preset.settings)
                 Button {
                     var s = preset.settings

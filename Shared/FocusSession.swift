@@ -93,12 +93,12 @@ public struct FocusSync: Codable, Sendable {
     public var sentAt: Date
     public var developerMode: Bool?
     /// Pomodoro rhythm and the break in progress (optional so older peers still decode).
-    public var pomodoro: PomodoroSettings?
+    public var pomodoro: PomodoroRhythm?
     public var rest: PomodoroBreak?
     /// Focus rounds finished in the current Pomodoro cycle.
     public var completedRounds: Int?
     public init(current: FocusSession?, history: [FocusSession], revision: Int, developerMode: Bool = false,
-                pomodoro: PomodoroSettings? = nil, rest: PomodoroBreak? = nil, completedRounds: Int? = nil) {
+                pomodoro: PomodoroRhythm? = nil, rest: PomodoroBreak? = nil, completedRounds: Int? = nil) {
         self.current = current; self.history = history; self.revision = revision; self.sentAt = Date()
         self.developerMode = developerMode
         self.pomodoro = pomodoro; self.rest = rest; self.completedRounds = completedRounds

@@ -15,6 +15,8 @@ cp "$(swift build -c release --show-bin-path)/GooglyMac" "$APP/Contents/MacOS/Go
 cp Mac/Info.plist "$APP/Contents/Info.plist"
 cp Shared/Fonts/*.ttf "$APP/Contents/Resources/"
 cp vendor/keramik-avatar/keramik-avatar.js vendor/keramik-3d/three.min.js vendor/keramik-3d/keramik-3d.js "$APP/Contents/Resources/"
+mkdir -p "$APP/Contents/Resources/web"
+cp Web/index.html "$APP/Contents/Resources/web/"
 
 # Sign with your Apple Development certificate when there is one, so macOS remembers the
 # Screen Recording and Microphone permissions across rebuilds. Otherwise sign ad hoc.

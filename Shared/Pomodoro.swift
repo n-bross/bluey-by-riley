@@ -2,7 +2,7 @@ import Foundation
 
 /// The Pomodoro rhythm: focus, short break, focus … and a long break after a few rounds.
 /// The Mac owns it (and remembers it); the phone and the notch show and change it.
-public struct PomodoroSettings: Codable, Equatable, Sendable {
+public struct PomodoroRhythm: Codable, Equatable, Sendable {
     /// Off: focus sessions just end, like before, with no breaks.
     public var enabled = true
     public var focusMinutes: Double = 25
@@ -22,7 +22,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     }
 
     /// Keeps every value in a sensible range.
-    public func clamped() -> PomodoroSettings {
+    public func clamped() -> PomodoroRhythm {
         var s = self
         s.focusMinutes = min(240, max(1, focusMinutes.isFinite ? focusMinutes.rounded() : 25))
         s.shortBreakMinutes = min(60, max(1, shortBreakMinutes.isFinite ? shortBreakMinutes.rounded() : 5))
@@ -45,15 +45,15 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         return "\(Int(focusMinutes)) min focus · \(Int(shortBreakMinutes)) min break · \(Int(longBreakMinutes)) min after \(roundsBeforeLongBreak) rounds"
     }
 
-    public static let presets: [(name: String, settings: PomodoroSettings)] = [
-        ("Classic 25 / 5", PomodoroSettings(focus: 25, shortBreak: 5, longBreak: 15, rounds: 4)),
-        ("Deep 50 / 10", PomodoroSettings(focus: 50, shortBreak: 10, longBreak: 30, rounds: 3)),
-        ("Long 90 / 20", PomodoroSettings(focus: 90, shortBreak: 20, longBreak: 30, rounds: 2)),
-        ("Gentle 15 / 5", PomodoroSettings(focus: 15, shortBreak: 5, longBreak: 15, rounds: 4)),
+    public static let presets: [(name: String, settings: PomodoroRhythm)] = [
+        ("Classic 25 / 5", PomodoroRhythm(focus: 25, shortBreak: 5, longBreak: 15, rounds: 4)),
+        ("Deep 50 / 10", PomodoroRhythm(focus: 50, shortBreak: 10, longBreak: 30, rounds: 3)),
+        ("Long 90 / 20", PomodoroRhythm(focus: 90, shortBreak: 20, longBreak: 30, rounds: 2)),
+        ("Gentle 15 / 5", PomodoroRhythm(focus: 15, shortBreak: 5, longBreak: 15, rounds: 4)),
     ]
 
     /// True when the rhythm (not the auto-start switches) matches the other settings.
-    public func sameRhythm(_ other: PomodoroSettings) -> Bool {
+    public func sameRhythm(_ other: PomodoroRhythm) -> Bool {
         focusMinutes == other.focusMinutes && shortBreakMinutes == other.shortBreakMinutes
             && longBreakMinutes == other.longBreakMinutes && roundsBeforeLongBreak == other.roundsBeforeLongBreak
     }

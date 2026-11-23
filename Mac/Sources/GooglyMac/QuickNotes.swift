@@ -200,9 +200,6 @@ final class QuickNotesWindow {
     }
 }
 
-private extension Color {
-    init(hex: UInt32) { self.init(nsColor: NSColor(hex: hex)) }
-}
 
 struct QuickNotesView: View {
     @ObservedObject var model: QuickNotesModel

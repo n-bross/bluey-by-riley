@@ -18,11 +18,36 @@ struct BlueyAppView: View {
 
     var body: some View {
         NavigationStack {
-            HStack(spacing: 0) {
-                sidebar
-                    .frame(width: 300)
-                    .background(Color(hex: Palette.panel).opacity(0.6))
-                sessionList
+            GeometryReader { geo in
+                if geo.size.width < 640 {
+                    // Portrait: settings first, the voice history one tap away.
+                    VStack(spacing: 0) {
+                        sidebar
+                        NavigationLink {
+                            sessionList.background(Color.black)
+                        } label: {
+                            HStack {
+                                Image(systemName: "text.bubble")
+                                Text("Voice history")
+                                Spacer()
+                                Text("\(store.sessions.count)").font(.plexMono(13))
+                                Image(systemName: "chevron.right")
+                            }
+                            .font(.plexSans(15).weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 22)
+                            .frame(minHeight: 54)
+                            .background(Color(hex: Palette.panel))
+                        }
+                    }
+                } else {
+                    HStack(spacing: 0) {
+                        sidebar
+                            .frame(width: 300)
+                            .background(Color(hex: Palette.panel).opacity(0.6))
+                        sessionList
+                    }
+                }
             }
             .background(Color.black)
             .navigationDestination(for: UUID.self) { id in
@@ -136,7 +161,7 @@ struct BlueyAppView: View {
                 Button(action: onClose) {
                     HStack(spacing: 8) {
                         Image(systemName: "face.smiling")
-                        Text("Back to his face")
+                        Text("Fertig")
                     }
                     .font(.plexSans(15).weight(.semibold))
                     .foregroundStyle(.white)
@@ -455,27 +480,6 @@ private struct EntryView: View {
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color(hex: Palette.berry2), lineWidth: 2))
             .padding(.leading, 36)
             .padding(.trailing, 80)
-        }
-    }
-}
-
-/// A tiny Bluey: the blob with two googly eyes.
-struct MiniBluey: View {
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            ZStack {
-                BlobShape().fill(BlobShape.linear)
-                HStack(spacing: w * 0.1) {
-                    ForEach(0..<2, id: \.self) { _ in
-                        Circle()
-                            .fill(.white)
-                            .frame(width: w * 0.26, height: w * 0.26)
-                            .overlay(Circle().fill(Color(hex: Palette.ink)).frame(width: w * 0.12).offset(x: w * 0.02, y: w * 0.03))
-                    }
-                }
-                .offset(y: -w * 0.04)
-            }
         }
     }
 }

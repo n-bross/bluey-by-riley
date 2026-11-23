@@ -26,7 +26,7 @@ final class PomodoroTests: XCTestCase {
         let app = companion { clock.time }
         var messages: [String] = []
         app.onPomodoro = { messages.append($0) }
-        var s = PomodoroSettings(focus: 1, shortBreak: 1, longBreak: 2, rounds: 2)
+        var s = PomodoroRhythm(focus: 1, shortBreak: 1, longBreak: 2, rounds: 2)
         s.autoStartFocus = false
         app.setPomodoro(s)
         app.heartbeat()
@@ -58,7 +58,7 @@ final class PomodoroTests: XCTestCase {
     @MainActor func testAutoStartNextRoundOnSameTask() async {
         let clock = Clock()
         let app = companion { clock.time }
-        var s = PomodoroSettings(focus: 1, shortBreak: 1, longBreak: 1, rounds: 4)
+        var s = PomodoroRhythm(focus: 1, shortBreak: 1, longBreak: 1, rounds: 4)
         s.autoStartFocus = true
         app.setPomodoro(s)
         app.heartbeat()
@@ -73,7 +73,7 @@ final class PomodoroTests: XCTestCase {
     @MainActor func testEndingEarlyGivesNoBreakAndSkipWorks() async {
         let clock = Clock()
         let app = companion { clock.time }
-        app.setPomodoro(PomodoroSettings(focus: 1, shortBreak: 5, longBreak: 15, rounds: 4))
+        app.setPomodoro(PomodoroRhythm(focus: 1, shortBreak: 5, longBreak: 15, rounds: 4))
         app.heartbeat()
         _ = app.start(task: "Emails")
         await run(app, seconds: 10, clock: clock)
@@ -91,7 +91,7 @@ final class PomodoroTests: XCTestCase {
     @MainActor func testPomodoroOffKeepsOldBehaviour() async {
         let clock = Clock()
         let app = companion { clock.time }
-        var s = PomodoroSettings(); s.enabled = false
+        var s = PomodoroRhythm(); s.enabled = false
         app.setPomodoro(s)
         app.heartbeat()
         _ = app.start(task: "Reading")
@@ -102,12 +102,12 @@ final class PomodoroTests: XCTestCase {
     }
 
     func testSettingsClampAndBreakKinds() {
-        var s = PomodoroSettings(focus: 999, shortBreak: 0, longBreak: .nan, rounds: 40).clamped()
+        var s = PomodoroRhythm(focus: 999, shortBreak: 0, longBreak: .nan, rounds: 40).clamped()
         XCTAssertEqual(s.focusMinutes, 240)
         XCTAssertEqual(s.shortBreakMinutes, 1)
         XCTAssertEqual(s.longBreakMinutes, 15)
         XCTAssertEqual(s.roundsBeforeLongBreak, 12)
-        s = PomodoroSettings()
+        s = PomodoroRhythm()
         XCTAssertEqual(s.breakKind(afterRound: 1), .short)
         XCTAssertEqual(s.breakKind(afterRound: 4), .long)
         XCTAssertEqual(s.breakKind(afterRound: 8), .long)

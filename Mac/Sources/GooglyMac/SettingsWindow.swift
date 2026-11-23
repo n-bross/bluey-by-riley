@@ -39,9 +39,9 @@ final class SettingsModel: ObservableObject {
         Binding(get: get, set: { [weak self] value in set(value); self?.objectWillChange.send() })
     }
 
-    var pomodoro: PomodoroSettings { focus.pomodoro }
+    var pomodoro: PomodoroRhythm { focus.pomodoro }
 
-    func setPomodoro(_ p: PomodoroSettings) { focus.setPomodoro(p); objectWillChange.send() }
+    func setPomodoro(_ p: PomodoroRhythm) { focus.setPomodoro(p); objectWillChange.send() }
 
     // MARK: Shortcut recording
 
@@ -113,9 +113,6 @@ final class SettingsWindowController {
 
 // MARK: - Views
 
-private extension Color {
-    init(hex: UInt32) { self.init(nsColor: NSColor(hex: hex)) }
-}
 
 struct SettingsView: View {
     @ObservedObject var model: SettingsModel
@@ -229,7 +226,7 @@ private struct ShortcutsPane: View {
 
 private struct FocusPane: View {
     @ObservedObject var model: SettingsModel
-    private var p: PomodoroSettings { model.pomodoro }
+    private var p: PomodoroRhythm { model.pomodoro }
 
     var body: some View {
         Form {
@@ -247,7 +244,7 @@ private struct FocusPane: View {
                 }
                 if p.enabled {
                     HStack(spacing: 10) {
-                        ForEach(PomodoroSettings.presets, id: \.name) { preset in PresetCard(preset: preset, model: model) }
+                        ForEach(PomodoroRhythm.presets, id: \.name) { preset in PresetCard(preset: preset, model: model) }
                     }
                     .padding(.vertical, 4)
                     CycleBar(settings: p).frame(height: 30).padding(.vertical, 2)
@@ -279,7 +276,7 @@ private struct FocusPane: View {
 
 /// One preset as a card: big rhythm, small name, highlighted when it's the current one.
 private struct PresetCard: View {
-    let preset: (name: String, settings: PomodoroSettings)
+    let preset: (name: String, settings: PomodoroRhythm)
     @ObservedObject var model: SettingsModel
 
     var body: some View {
@@ -307,7 +304,7 @@ private struct PresetCard: View {
 
 /// The whole cycle at a glance: focus rounds in blue, short breaks green, the long break teal.
 private struct CycleBar: View {
-    let settings: PomodoroSettings
+    let settings: PomodoroRhythm
 
     var body: some View {
         let rounds = settings.roundsBeforeLongBreak

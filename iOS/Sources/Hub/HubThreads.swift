@@ -171,7 +171,7 @@ struct ThreadDetailView: View {
                             if let activity { ToolActivityRow(text: activity, running: true) }
                             if !streaming.isEmpty { MessageView(message: HermesMessage(id: "live", role: .assistant, text: streaming), openBrowser: openBrowser) }
                             ForEach(prompts) { p in approvalCard(p) }
-                            if streaming.isEmpty && activity == nil { TypingDots() }
+                            if streaming.isEmpty && activity == nil { HubTypingDots() }
                         }
                         if let error { Text(error).t3Text(.sm, color: T3.dangerForeground).padding(12)
                             .background(RoundedRectangle(cornerRadius: 12).fill(T3.danger)) }
@@ -311,7 +311,7 @@ struct MessageView: View {
                     .textSelection(.enabled)
             }
         case .assistant:
-            MarkdownText(text: message.text, openBrowser: openBrowser)
+            HubMarkdownText(text: message.text, openBrowser: openBrowser)
         case .tool:
             ToolActivityRow(text: ToolActivityRow.label(message.toolName ?? "tool"), running: false)
         case .system:
@@ -347,7 +347,7 @@ struct ToolActivityRow: View {
     }
 }
 
-struct TypingDots: View {
+struct HubTypingDots: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.2)) { ctx in
             let phase = Int(ctx.date.timeIntervalSinceReferenceDate * 3) % 3
@@ -362,7 +362,7 @@ struct TypingDots: View {
 }
 
 /// Markdown like T3's feed: paragraphs with inline formatting and links, code blocks in cards.
-struct MarkdownText: View {
+struct HubMarkdownText: View {
     let text: String
     var openBrowser: (URL) -> Void
 
