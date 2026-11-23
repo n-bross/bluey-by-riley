@@ -50,12 +50,14 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
     @ObservedObject var model: WorkspaceModel
     @Binding var tab: WorkspaceTab
     var connectionName: String?
-    /// The face tab. On the iPhone, choosing it opens the full-screen face instead.
+    /// The face tab in the Mac sidebar.
     @ViewBuilder var face: () -> Face
     @ViewBuilder var settings: () -> Settings
     @Binding var showSettings: Bool
-    var openFace: (() -> Void)? = nil
     @StateObject private var ui = WorkspaceUI()
+    #if os(iOS)
+    @State private var keyboardVisible = false
+    #endif
 
     private var info: HeaderInfo { HeaderInfo(connectionName: connectionName, onSettings: { showSettings = true }) }
 
@@ -65,18 +67,17 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if !ui.inDetail {
-                        FloatingTabBar(tab: $tab, ui: ui, openFace: openFace)
+                    if !ui.inDetail && !keyboardVisible {
+                        FloatingTabBar(tab: $tab, ui: ui)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
                 .animation(.snappy(duration: 0.25), value: ui.inDetail)
-                .ignoresSafeArea(.keyboard, edges: .bottom)
-                .overlay(alignment: .bottomTrailing) {
-                    // Only the todo list needs it; the chat's send button sits right there.
-                    if tab == .todos {
-                        KeyboardDismissButton().padding(.trailing, 12).padding(.bottom, 8)
-                    }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                    keyboardVisible = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                    keyboardVisible = false
                 }
             #else
             HStack(spacing: 0) {
@@ -94,7 +95,7 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
         .onChange(of: tab) { _, _ in ui.endSearch(); ui.inDetail = false }
         .onChange(of: ui.requestedTab) { _, requested in
             guard let requested else { return }
-            withAnimation(.snappy(duration: 0.3)) { tab = requested }
+            tab = requested
             ui.requestedTab = nil
         }
     }
@@ -112,7 +113,8 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
 
     #if os(macOS)
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let openTodos = model.snapshot.todos.count { !$0.deleted && !$0.done }
+        return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 BlueyAvatar(mood: model.snapshot.threads.contains(where: \.isStreaming) ? .thinking : .listening)
                     .frame(width: 44, height: 39)
@@ -132,8 +134,8 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
                         }
                         Text(item.title).font(.plexSans(14))
                         Spacer()
-                        if item == .todos, model.stats.openTodos > 0 {
-                            Text("\(model.stats.openTodos)").font(.plexMono(11)).foregroundStyle(Theme.soft)
+                        if item == .todos, openTodos > 0 {
+                            Text("\(openTodos)").font(.plexMono(11)).foregroundStyle(Theme.soft)
                         }
                         if item == .pomodoro, model.pomodoro.isRunning {
                             Circle().fill(model.pomodoro.phase == .focus ? Theme.red : Theme.green).frame(width: 7, height: 7)

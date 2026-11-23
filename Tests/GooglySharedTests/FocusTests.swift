@@ -49,10 +49,10 @@ final class FocusTests: XCTestCase {
         }
         XCTAssertTrue(policy.observe(FocusCheck(elapsed: 120, activity: .offTask, probability: 0.56, confidence: 0.34), age: 1))
         var normal = FocusNudgePolicy()
-        for t in stride(from: 0.0, through: 180, by: 30) {
+        for t in [15.0, 30, 45] {
             XCTAssertFalse(normal.observe(FocusCheck(elapsed: t, activity: .offTask, probability: 0.7, confidence: 0.1), age: 1))
         }
-        XCTAssertTrue(normal.observe(FocusCheck(elapsed: 210, activity: .offTask, probability: 0.7, confidence: 0.1), age: 1))
+        XCTAssertTrue(normal.observe(FocusCheck(elapsed: 60, activity: .offTask, probability: 0.7, confidence: 0.1), age: 1))
     }
     func testVoiceRetainsBeginningUntilConnectedAndRejectsEmptyTurns() {
         var turn = VoiceTurnBuffer()
@@ -71,40 +71,39 @@ final class FocusTests: XCTestCase {
     func off(_ elapsed: Double, _ strength: Double = 0.99) -> FocusCheck {
         FocusCheck(elapsed: elapsed, activity: .offTask, probability: strength, confidence: strength)
     }
-    func testTwoMinuteMinimumAndCooldown() {
+    func testStrongEvidenceNudgesAfterTwoChecksAndRespectsCooldown() {
         var policy = FocusNudgePolicy()
-        for t in stride(from: 30.0, through: 120, by: 30) { XCTAssertFalse(policy.observe(off(t), age: 1)) }
+        XCTAssertFalse(policy.observe(off(15), age: 1))
+        XCTAssertTrue(policy.observe(off(30), age: 1))
+        for t in stride(from: 45.0, through: 135, by: 15) { XCTAssertFalse(policy.observe(off(t), age: 1)) }
         XCTAssertTrue(policy.observe(off(150), age: 1))
-        for t in stride(from: 180.0, through: 270, by: 30) { XCTAssertFalse(policy.observe(off(t), age: 1)) }
-        XCTAssertTrue(policy.observe(off(300), age: 1))
     }
-    func testModerateEvidenceWaitsThreeToFourMinutes() {
+    func testModerateEvidenceNeedsMoreChecks() {
         var policy = FocusNudgePolicy()
-        for t in stride(from: 0.0, through: 180, by: 30) { XCTAssertFalse(policy.observe(off(t, 0.65), age: 2)) }
-        XCTAssertTrue(policy.observe(off(210, 0.65), age: 2))
+        for t in [15.0, 30, 45] { XCTAssertFalse(policy.observe(off(t, 0.65), age: 2)) }
+        XCTAssertTrue(policy.observe(off(60, 0.65), age: 2))
         var weak = FocusNudgePolicy()
-        for t in stride(from: 0.0, through: 210, by: 30) { XCTAssertFalse(weak.observe(off(t, 0.5), age: 1)) }
-        XCTAssertTrue(weak.observe(off(240, 0.5), age: 1))
+        for t in [15.0, 30, 45, 60] { XCTAssertFalse(weak.observe(off(t, 0.5), age: 1)) }
+        XCTAssertTrue(weak.observe(off(75, 0.5), age: 1))
     }
     func testOnTaskUncertainUnavailableAndPauseResetEvidence() {
         for activity in [FocusActivity.onTask, .uncertain, .unavailable, .paused] {
             var policy = FocusNudgePolicy()
-            for t in [0.0, 30, 60, 90] { XCTAssertFalse(policy.observe(off(t), age: 1)) }
-            XCTAssertFalse(policy.observe(FocusCheck(elapsed: 120, activity: activity), age: 1))
-            for t in [150.0, 180, 210, 240] { XCTAssertFalse(policy.observe(off(t), age: 1)) }
-            XCTAssertTrue(policy.observe(off(270), age: 1))
+            XCTAssertFalse(policy.observe(off(15), age: 1))
+            XCTAssertFalse(policy.observe(FocusCheck(elapsed: 30, activity: activity), age: 1))
+            XCTAssertFalse(policy.observe(off(45), age: 1))
+            XCTAssertTrue(policy.observe(off(60), age: 1))
         }
     }
     func testStaleGapAndNonMajorityProbabilityDoNotAccumulate() {
         var policy = FocusNudgePolicy()
-        for t in [0.0, 30, 60, 90] { _ = policy.observe(off(t), age: 1) }
-        XCTAssertFalse(policy.observe(off(120), age: 21))
-        XCTAssertFalse(policy.observe(off(150), age: 1))
-        XCTAssertFalse(policy.observe(off(240), age: 1)) // missing checks reset the span
-        var low = off(270); low.probability = 0.49
-        XCTAssertFalse(policy.observe(low, age: 1))
-        XCTAssertFalse(policy.observe(off(300), age: 1))
-        XCTAssertFalse(policy.observe(off(330), age: -1))
+        XCTAssertFalse(policy.observe(off(15), age: 1))
+        XCTAssertFalse(policy.observe(off(30), age: 21))
+        XCTAssertFalse(policy.observe(off(45), age: 1))
+        XCTAssertFalse(policy.observe(off(75), age: 1)) // missing checks reset the span
+        XCTAssertFalse(policy.observe(off(90, 0.49), age: 1))
+        XCTAssertFalse(policy.observe(off(105), age: 1))
+        XCTAssertFalse(policy.observe(off(120), age: -1))
         XCTAssertFalse(policy.observe(off(.nan), age: 1))
     }
     func testPauseResumeExpiryAndSynchronizationRoundTrip() throws {

@@ -267,6 +267,8 @@ private struct PomodoroSettingsView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Sichern") { save(settings); dismiss() } }
             }
         }
+        #if os(macOS)
         .frame(minWidth: 380, minHeight: 380)
+        #endif
     }
 }

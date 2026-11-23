@@ -41,7 +41,7 @@ public struct FocusSession: Codable, Identifiable, Equatable, Sendable {
     public var startedAt = Date()
     public var elapsed: Double = 0
     public var status: Status = .running
-    public var detail = "First check in 30 seconds"
+    public var detail = "First check in 15 seconds"
     public var checks: [FocusCheck] = []
     // Optional fields preserve decoding of existing session history.
     public var developerMode: Bool?
@@ -51,7 +51,7 @@ public struct FocusSession: Codable, Identifiable, Equatable, Sendable {
     public var activity: ActivitySummary?
     public var isDeveloperMode: Bool { developerMode == true }
     public var clockRate: Double { isDeveloperMode ? 4 : 1 }
-    public var checkInterval: Double { isDeveloperMode ? 10 : 30 } // real seconds
+    public var checkInterval: Double { isDeveloperMode ? 10 : 15 } // real seconds
     public var observationDuration: Double { checkInterval * clockRate }
     public var realActiveElapsed: Double { realElapsed ?? elapsed }
     public var remaining: Double { max(0, duration - elapsed) }
@@ -112,7 +112,7 @@ public struct FocusNudgePolicy {
     private var lastNudge = -Double.infinity
     private let maximumGap: Double
     private let developerMode: Bool
-    public init(maximumGap: Double = 45, developerMode: Bool = false) {
+    public init(maximumGap: Double = 22.5, developerMode: Bool = false) {
         self.maximumGap = maximumGap; self.developerMode = developerMode
     }
     public mutating func reset() { run = [] }
@@ -128,8 +128,8 @@ public struct FocusNudgePolicy {
         }
         run.append(check)
         let strength = run.map(\.probability).reduce(0, +) / Double(run.count)
-        let minimum = developerMode ? 40.0 : 120.0
-        let maximum = developerMode ? 80.0 : 240.0
+        let minimum = developerMode ? 40.0 : 15.0
+        let maximum = developerMode ? 80.0 : 60.0
         let required = strength >= 0.95 ? minimum : maximum - max(0, strength - 0.5) / 0.45 * (maximum - minimum)
         guard run.count >= 2, check.elapsed - (run.first?.elapsed ?? check.elapsed) >= max(minimum, required),
               check.elapsed - lastNudge >= 120 else { return false }

@@ -14,15 +14,12 @@ struct ChatTab: View {
     @State private var composingNew = false
     @State private var modelFilter: String?
 
-    private var threads: [ChatThread] {
-        model.snapshot.visibleThreads.filter { thread in
-            (modelFilter == nil || thread.model == modelFilter) &&
-                ui.matches(thread.title, thread.messages.suffix(20).map(\.text).joined(separator: " "))
+    private func matchingThreads(in visibleThreads: [ChatThread]) -> [ChatThread] {
+        let searchActive = ui.search.contains { $0 != " " }
+        return visibleThreads.filter { thread in
+            guard modelFilter == nil || thread.model == modelFilter else { return false }
+            return !searchActive || ui.matches(thread.title, thread.messages.suffix(20).map(\.text).joined(separator: " "))
         }
-    }
-
-    private var usedModels: [String] {
-        Array(Set(model.snapshot.visibleThreads.map(\.model))).sorted()
     }
 
     var body: some View {
@@ -36,7 +33,7 @@ struct ChatTab: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: Binding(get: { selected != nil || composingNew },
                                                         set: { if !$0 { selected = nil; composingNew = false } })) {
-                ConversationView(model: model, threadID: $selected)
+                ConversationView(model: model, threadID: $selected, focusOnAppear: composingNew)
                     .toolbarBackground(Theme.panel, for: .navigationBar)
                     .onAppear { ui.inDetail = true }
                     .onDisappear { ui.inDetail = false }
@@ -52,7 +49,7 @@ struct ChatTab: View {
             .frame(width: 300)
             .background(Theme.panel.opacity(0.35))
             Divider().overlay(Theme.line)
-            ConversationView(model: model, threadID: $selected)
+            ConversationView(model: model, threadID: $selected, composeCount: ui.composeCount)
         }
         .onChange(of: ui.composeCount) { _, _ in newChat() }
         #endif
@@ -66,6 +63,7 @@ struct ChatTab: View {
 
     private var header: some View {
         TabHeader(ui: ui, model: model, tab: .chat, connectionName: info.connectionName, onSettings: info.onSettings) {
+            let usedModels = Array(Set(model.snapshot.threads.lazy.filter { !$0.deleted }.map(\.model))).sorted()
             if usedModels.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -96,12 +94,14 @@ struct ChatTab: View {
     }
 
     private var threadList: some View {
-        Group {
-            if model.snapshot.visibleThreads.isEmpty {
+        let visibleThreads = model.snapshot.visibleThreads
+        let threads = matchingThreads(in: visibleThreads)
+        return Group {
+            if visibleThreads.isEmpty {
                 VStack(spacing: 16) {
-                    BlueyEmptyState(title: "Noch keine Chats", subtitle: "Tippe auf den Stift unten rechts und frag Bluey irgendwas. Bilder, PDFs und Dateien kannst du anhängen.")
+                    BlueyEmptyState(title: "Noch keine Chats", subtitle: "Frag Bluey etwas oder häng Bilder, PDFs und Dateien an.")
                     #if os(macOS)
-                    Button("Neuer Chat", action: newChat).buttonStyle(.borderedProminent)
+                    Button("Neuer Chat") { ui.composeCount += 1 }.buttonStyle(.borderedProminent)
                     #endif
                 }
             } else if threads.isEmpty {
@@ -193,6 +193,8 @@ private struct ThreadRow: View {
 struct ConversationView: View {
     @ObservedObject var model: WorkspaceModel
     @Binding var threadID: UUID?
+    var focusOnAppear = false
+    var composeCount = 0
     @State private var draft = ""
     @State private var attachments: [ChatAttachment] = []
     @State private var uploading = 0
@@ -230,7 +232,11 @@ struct ConversationView: View {
             webSearch = thread?.webSearch ?? false
             error = nil
         }
-        .onAppear { webSearch = thread?.webSearch ?? false }
+        .onAppear {
+            webSearch = thread?.webSearch ?? false
+            if focusOnAppear { composerFocused = true }
+        }
+        .onChange(of: composeCount) { _, _ in composerFocused = true }
         .onChange(of: photoItems) { _, items in
             guard !items.isEmpty else { return }
             photoItems = []
@@ -345,7 +351,7 @@ struct ConversationView: View {
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
-                .fixedSize()
+                .accessibilityLabel("Modell: \(model.models.first { $0.id == currentModel }?.name ?? currentModel)")
 
                 Button { webSearch.toggle() } label: {
                     HStack(spacing: 4) {
@@ -361,8 +367,9 @@ struct ConversationView: View {
                 .buttonStyle(.plain)
                 .glassCapsule(tint: webSearch ? Theme.blue.opacity(0.6) : nil)
                 .accessibilityLabel("Websuche")
+                .fixedSize()
 
-                Spacer()
+                Spacer(minLength: 0)
 
                 if thread?.isStreaming == true {
                     Button { if let id = threadID { model.stop(threadID: id) } } label: {

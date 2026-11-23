@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let server = PhoneServer()
     private var statusItem: NSStatusItem!
     private let codex = CodexController()
-    private let focus = FocusCompanion()
+    private let focus = FocusCompanion(steering: FocusSteering())
     private let pairingPanel = PairingPanel()
     private let avatarWindow = AvatarWindow()
     private let quickNotes = QuickNotesWindow()

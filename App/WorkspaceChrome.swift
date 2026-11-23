@@ -36,6 +36,14 @@ extension WorkspaceTab {
         default: return nil
         }
     }
+    var composeTitle: String {
+        switch self {
+        case .chat: return "Neuer Chat"
+        case .todos: return "Neues Todo"
+        case .notes: return "Neue Notiz"
+        default: return "Neu"
+        }
+    }
     var searchPrompt: String {
         switch self {
         case .chat: return "Chats durchsuchen"
@@ -63,6 +71,17 @@ struct TabHeader<Chips: View>: View {
             } else {
                 titleRow
             }
+            #if os(macOS)
+            if let icon = tab.composeIcon {
+                Button { ui.composeCount += 1 } label: {
+                    Label(tab.composeTitle, systemImage: icon)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut("n", modifiers: .command)
+                .help("\(tab.composeTitle) (⌘N)")
+            }
+            #endif
             chips()
         }
         .padding(.horizontal, 20)
@@ -82,17 +101,11 @@ struct TabHeader<Chips: View>: View {
             Spacer()
             GlassGroup(spacing: 10) {
                 HStack(spacing: 10) {
-                    #if os(macOS)
-                    if let icon = tab.composeIcon {
-                        GlassIconButton(icon: icon, label: "Neu", size: 44) { ui.composeCount += 1 }
-                            .keyboardShortcut("n", modifiers: .command)
-                    }
-                    #endif
                     #if os(iOS)
                     GlassIconButton(icon: "gearshape", label: "Einstellungen", size: 44, action: onSettings)
                     #endif
                     if tab.searchable {
-                        GlassIconButton(icon: "magnifyingglass", label: "Suchen", size: 56) {
+                        GlassIconButton(icon: "magnifyingglass", label: "Suchen", size: 44) {
                             ui.searching = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { searchFocused = true }
                         }
@@ -177,80 +190,55 @@ struct FilterChip: View {
 struct FloatingTabBar: View {
     @Binding var tab: WorkspaceTab
     @ObservedObject var ui: WorkspaceUI
-    var openFace: (() -> Void)?
     @Namespace private var selection
+    private let composeSize: CGFloat = 54
 
     var body: some View {
-        GlassGroup(spacing: 14) {
-            HStack(spacing: 14) {
+        GlassGroup(spacing: 8) {
+            HStack(spacing: 8) {
                 HStack(spacing: 0) {
-                    ForEach(WorkspaceTab.allCases) { item in
+                    ForEach(WorkspaceTab.allCases.filter { $0 != .face }) { item in
                         Button {
-                            if item == .face, let openFace { openFace(); return }
-                            if tab != item { ui.endSearch() }
-                            withAnimation(.snappy(duration: 0.3)) { tab = item }
+                            tab = item
                         } label: {
                             ZStack {
                                 if tab == item {
                                     Capsule().fill(Color.white.opacity(0.14)).matchedGeometryEffect(id: "selected", in: selection)
                                 }
-                                if item == .face {
-                                    MiniBluey().frame(width: 30, height: 27)
-                                } else {
-                                    Image(systemName: tab == item ? item.selectedIcon : item.icon)
-                                        .font(.system(size: 22, weight: .regular))
-                                        .foregroundStyle(tab == item ? Theme.blue : .white)
-                                }
+                                Image(systemName: tab == item ? item.selectedIcon : item.icon)
+                                    .font(.system(size: 19, weight: .medium))
+                                    .foregroundStyle(tab == item ? Theme.accentLight : .white)
                             }
                             .frame(maxWidth: .infinity)
-                            .frame(height: 54)
+                            .frame(height: 44)
                             .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(item.title)
+                        .accessibilityAddTraits(tab == item ? .isSelected : [])
                     }
                 }
                 .padding(5)
                 .glassCapsule()
+                .animation(.snappy(duration: 0.25), value: tab)
 
-                if let icon = tab.composeIcon {
-                    GlassIconButton(icon: icon, label: tab == .chat ? "Neuer Chat" : tab == .notes ? "Neue Notiz" : "Neues Todo", size: 64) {
-                        ui.composeCount += 1
+                // Keep the tab positions fixed even on screens without a compose action.
+                Color.clear
+                    .frame(width: composeSize, height: composeSize)
+                    .accessibilityHidden(true)
+                    .overlay {
+                        if let icon = tab.composeIcon {
+                            GlassIconButton(icon: icon, label: tab.composeTitle, size: composeSize,
+                                            tint: Theme.blue.opacity(0.65)) {
+                                ui.composeCount += 1
+                            }
+                        }
                     }
-                    .transition(.scale.combined(with: .opacity))
-                }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.bottom, 4)
-        .animation(.snappy(duration: 0.25), value: tab)
     }
 }
 
-/// While the keyboard is up: a small glass button that puts it away.
-struct KeyboardDismissButton: View {
-    @State private var visible = false
-    var body: some View {
-        Group {
-            if visible {
-                Button {
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                } label: {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 48, height: 40)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .glassCapsule()
-                .accessibilityLabel("Tastatur schließen")
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
-            }
-        }
-        .animation(.snappy(duration: 0.2), value: visible)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in visible = true }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in visible = false }
-    }
-}
 #endif

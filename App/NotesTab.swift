@@ -9,6 +9,7 @@ struct NotesTab: View {
     @ObservedObject var ui: WorkspaceUI
     var info: HeaderInfo
     @State private var selected: UUID?
+    @State private var newNoteID: UUID?
     @State private var pinnedOnly = false
 
     private var notes: [NoteItem] {
@@ -17,7 +18,7 @@ struct NotesTab: View {
 
     private var header: some View {
         TabHeader(ui: ui, model: model, tab: .notes, connectionName: info.connectionName, onSettings: info.onSettings) {
-            if model.snapshot.visibleNotes.contains(where: \.pinned) {
+            if model.snapshot.notes.contains(where: { !$0.deleted && $0.pinned }) {
                 HStack(spacing: 8) {
                     FilterChip(title: "Alle", selected: !pinnedOnly) { pinnedOnly = false }
                     FilterChip(title: "Angeheftet", selected: pinnedOnly, icon: "pin") { pinnedOnly = true }
@@ -28,7 +29,9 @@ struct NotesTab: View {
 
     private func newNote() {
         ui.endSearch()
-        selected = model.addNote()
+        pinnedOnly = false
+        newNoteID = model.addNote()
+        selected = newNoteID
     }
 
     var body: some View {
@@ -42,7 +45,7 @@ struct NotesTab: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })) {
                 if let id = selected {
-                    NoteEditor(model: model, id: id).id(id)
+                    NoteEditor(model: model, id: id, focusTitle: id == newNoteID).id(id)
                         .onAppear { ui.inDetail = true }
                         .onDisappear { ui.inDetail = false }
                 }
@@ -59,7 +62,7 @@ struct NotesTab: View {
             .background(Theme.panel.opacity(0.35))
             Divider().overlay(Theme.line)
             if let id = selected, model.note(id) != nil {
-                NoteEditor(model: model, id: id).id(id)
+                NoteEditor(model: model, id: id, focusTitle: id == newNoteID).id(id)
             } else {
                 BlueyEmptyState(title: "Notizen", subtitle: "Wähle links eine Notiz oder leg eine neue an.")
             }
@@ -69,14 +72,15 @@ struct NotesTab: View {
     }
 
     private var list: some View {
-        VStack(spacing: 10) {
+        let notes = notes
+        return VStack(spacing: 10) {
             if notes.isEmpty {
                 BlueyEmptyState(title: ui.search.isEmpty ? "Noch keine Notizen" : "Nichts gefunden",
-                                subtitle: ui.search.isEmpty ? "Gedanken raus aus dem Kopf, rein in eine Notiz. Tipp auf den Stift." : "Versuch ein anderes Wort.")
+                                subtitle: ui.search.isEmpty ? "Mit „Neue Notiz“ kannst du einen Gedanken festhalten." : "Versuch ein anderes Wort.")
             } else {
                 List {
                     ForEach(notes) { note in
-                        Button { selected = note.id } label: {
+                        Button { newNoteID = nil; selected = note.id } label: {
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 5) {
                                     if note.pinned { Image(systemName: "pin.fill").font(.system(size: 10)).foregroundStyle(Theme.yellow) }
@@ -123,6 +127,8 @@ struct NotesTab: View {
 private struct NoteEditor: View {
     @ObservedObject var model: WorkspaceModel
     let id: UUID
+    let focusTitle: Bool
+    @FocusState private var titleFocused: Bool
     @State private var title = ""
     @State private var text = ""
     @State private var loaded = false
@@ -132,6 +138,7 @@ private struct NoteEditor: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 TextField("Titel", text: $title)
+                    .focused($titleFocused)
                     .textFieldStyle(.plain)
                     .font(.fredoka(26))
                     .foregroundStyle(.white)
@@ -157,7 +164,10 @@ private struct NoteEditor: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .onAppear(perform: load)
+        .onAppear {
+            load()
+            if focusTitle { titleFocused = true }
+        }
         .onChange(of: title) { _, _ in scheduleSave() }
         .onChange(of: text) { _, _ in scheduleSave() }
         .onDisappear { saveWork?.perform() }

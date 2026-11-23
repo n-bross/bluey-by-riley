@@ -17,6 +17,7 @@ struct ScreenSnapshot {
     /// The frontmost app and its clickable controls (empty without Accessibility permission).
     var app: String? = nil
     var controls: [ControlsReader.Control] = []
+    var isOnMainDisplay = true
 
     func target(_ id: String) -> Target? {
         let id = id.trimmingCharacters(in: .whitespaces).uppercased()
@@ -75,9 +76,10 @@ enum ScreenReaderError: LocalizedError {
 
 /// Captures the main display (without Googly's own cursor and captions) and reads every word with its exact box.
 enum ScreenReader {
-    static func snapshot() async throws -> ScreenSnapshot {
+    static func snapshot(preferForegroundDisplay: Bool = false) async throws -> ScreenSnapshot {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first else {
+        let foregroundDisplay = preferForegroundDisplay ? displayWithFrontWindow(in: content.displays) : nil
+        guard let display = foregroundDisplay ?? content.displays.first(where: { $0.displayID == CGMainDisplayID() }) ?? content.displays.first else {
             throw ScreenReaderError.noDisplay
         }
         let me = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier || $0.bundleIdentifier == Bundle.main.bundleIdentifier }
@@ -93,7 +95,25 @@ enum ScreenReader {
         let controlsTask = Task.detached(priority: .userInitiated) { ControlsReader.read(screen: size) }
         let lines = try recognize(image, in: size)
         let controls = await controlsTask.value
-        return ScreenSnapshot(jpeg: jpeg(image, maxEdge: 1100), lines: lines, size: size, app: controls.app, controls: controls.controls)
+        return ScreenSnapshot(jpeg: jpeg(image, maxEdge: 1100), lines: lines, size: size, app: controls.app, controls: controls.controls,
+                              isOnMainDisplay: display.displayID == CGMainDisplayID())
+    }
+
+    private static func displayWithFrontWindow(in displays: [SCDisplay]) -> SCDisplay? {
+        guard displays.count > 1, let app = NSWorkspace.shared.frontmostApplication,
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
+              let front = windows.first(where: {
+                  $0[kCGWindowOwnerPID as String] as? pid_t == app.processIdentifier &&
+                  $0[kCGWindowLayer as String] as? Int == 0
+              }), let bounds = front[kCGWindowBounds as String] as? [String: Any],
+              let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { return nil }
+        return displays.max { a, b in
+            func overlap(_ display: SCDisplay) -> CGFloat {
+                let intersection = CGDisplayBounds(display.displayID).intersection(frame)
+                return intersection.isNull ? 0 : intersection.width * intersection.height
+            }
+            return overlap(a) < overlap(b)
+        }
     }
 
     static func recognize(_ image: CGImage, in size: CGSize) throws -> [(line: Target, words: [Target])] {
