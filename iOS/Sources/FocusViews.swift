@@ -222,7 +222,7 @@ private struct FocusSummary: View {
                 legend("Off task", Color(hex: 0xEBAC73), category: "off_task")
                 legend("Unknown", .gray, category: "uncertain")
             }.font(.plexSans(11))
-            Text("Tap a category to see probabilities and confidence. Grey also includes unchecked time. Pauses are excluded.")
+            Text("Tap a category to inspect its checks. Grey also includes unchecked time. Pauses are excluded.")
                 .font(.plexSans(11)).foregroundStyle(.secondary)
         }
         .sheet(item: $inspection) { selection in FocusCheckList(session: session, category: selection.id) }
@@ -234,7 +234,7 @@ private struct FocusSummary: View {
         Button { inspect(category) } label: {
             HStack(spacing: 5) { Rectangle().fill(color).frame(width: 9, height: 9); Text(name) }
                 .frame(minHeight: 44).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel("Inspect \(name) confidence")
+        }.buttonStyle(.plain).accessibilityLabel("Inspect \(name) checks")
     }
 }
 
@@ -250,6 +250,12 @@ private struct FocusCheckList: View {
             return $0.activity.rawValue == category
         }
     }
+    private var distractions: [(label: String, count: Int)] {
+        let labels = checks.map { $0.distractionLabel ?? "No details recorded" }
+        return Dictionary(grouping: labels, by: { $0 })
+            .map { (label: $0.key, count: $0.value.count) }
+            .sorted { $0.count == $1.count ? $0.label < $1.label : $0.count > $1.count }
+    }
     var body: some View {
         NavigationStack {
             List {
@@ -262,6 +268,13 @@ private struct FocusCheckList: View {
                     }.pickerStyle(.segmented)
                     Text("Each check is a periodic observation. Developer Mode checks every 10 real seconds with a 4× clock. Category probabilities and overall decision confidence are separate model estimates, not guarantees.")
                         .font(.plexSans(13)).foregroundStyle(.secondary)
+                }
+                if category == "off_task", !checks.isEmpty {
+                    Section("Distractions") {
+                        ForEach(distractions, id: \.label) { distraction in
+                            LabeledContent(distraction.label, value: distraction.count == 1 ? "1 check" : "\(distraction.count) checks")
+                        }
+                    }
                 }
                 Section("Latest checks first") {
                     if checks.isEmpty {
@@ -277,6 +290,9 @@ private struct FocusCheckList: View {
                                     Text(check.activity.focusName).font(.fredoka(20))
                                     Spacer()
                                     Text(FocusSession.clock(check.elapsed)).font(.plexMono(12))
+                                }
+                                if let distraction = check.distractionLabel {
+                                    Text(distraction).font(.plexSans(13))
                                 }
                                 if let estimate = check.estimate(for: check.activity) {
                                     Text("Category probability \(estimate.focusPercent) · confidence \(check.confidence.focusPercent)")
@@ -305,6 +321,9 @@ private struct FocusCheckDetail: View {
             Section {
                 LabeledContent("Observation", value: check.activity.focusName)
                 LabeledContent("Active session time", value: FocusSession.clock(check.elapsed))
+                if check.activity == .offTask {
+                    LabeledContent("Distraction", value: check.distractionLabel ?? "No details recorded")
+                }
             }
             if check.activity == .unavailable {
                 Text("This check failed or arrived too late. It has no valid confidence estimate and does not count toward a nudge.")

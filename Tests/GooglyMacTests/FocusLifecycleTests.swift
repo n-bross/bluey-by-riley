@@ -4,7 +4,7 @@ import GooglyShared
 
 final class FocusLifecycleTests: XCTestCase {
     @MainActor func testRepeatedOffTaskChecksActuallyDeliverANudgeIncludingFailures() async throws {
-        let answer = try FocusDecision.decode(Data(#"{"answers":[{"name":"activity","type":"choice","choice":"off_task","confidence":0.2,"probabilities":[{"value":"on_task","probability":0.005},{"value":"off_task","probability":0.99},{"value":"uncertain","probability":0.005}]}]}"#.utf8))
+        let answer = try FocusDecision.decode(Data(#"{"answers":[{"name":"visible_activity","type":"choice","choice":"social_feed"},{"name":"activity","type":"choice","choice":"off_task","confidence":0.2,"probabilities":[{"value":"on_task","probability":0.005},{"value":"off_task","probability":0.99},{"value":"uncertain","probability":0.005}]}]}"#.utf8))
         for failure in ["none", "capture", "wording"] {
             var time = 100.0, captures = 0, wordingCalls = 0, delivered = 0
             let nudged = expectation(description: "Nudge delivered with \(failure)")
@@ -12,7 +12,7 @@ final class FocusLifecycleTests: XCTestCase {
                 capture: {
                     captures += 1
                     if failure == "capture", captures == 3 { throw CancellationError() }
-                    return ScreenSnapshot(jpeg: Data(), lines: [], size: .zero)
+                    return ScreenSnapshot(jpeg: Data(), lines: [], size: .zero, app: captures <= 2 ? "Safari" : "Mail")
                 }, classify: { _, _, _ in answer }, prepareNudge: { _, _ in
                     wordingCalls += 1
                     if failure == "wording" { throw CancellationError() }
@@ -33,6 +33,9 @@ final class FocusLifecycleTests: XCTestCase {
             XCTAssertEqual(app.current?.checks.last?.nudged, true)
             XCTAssertEqual(wordingCalls, failure == "capture" ? 0 : 1)
             _ = app.end()
+            let session = try XCTUnwrap(app.history.first)
+            let restored = try JSONDecoder().decode(FocusSession.self, from: JSONEncoder().encode(session))
+            XCTAssertEqual(restored.checks.compactMap(\.distractionLabel), ["Social media · Safari", "Social media · Safari"])
         }
     }
     @MainActor func testPauseDuringNudgePreparationNeverShowsALateBubble() async throws {

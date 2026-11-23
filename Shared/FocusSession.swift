@@ -4,6 +4,22 @@ public enum FocusActivity: String, Codable, Sendable {
     case onTask = "on_task", offTask = "off_task", uncertain, unavailable, paused
 }
 
+public enum FocusDistraction: String, Codable, CaseIterable, Sendable {
+    case socialFeed = "social_feed", messaging, video, gaming, shopping, browsing, other
+
+    public var label: String {
+        switch self {
+        case .socialFeed: return "Social media"
+        case .messaging: return "Messaging or email"
+        case .video: return "Watching videos"
+        case .gaming: return "Playing games"
+        case .shopping: return "Online shopping"
+        case .browsing: return "Web browsing"
+        case .other: return "Other activity"
+        }
+    }
+}
+
 public struct FocusCheck: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID()
     public var elapsed: Double
@@ -14,13 +30,23 @@ public struct FocusCheck: Codable, Identifiable, Equatable, Sendable {
     public var probabilities: [String: Double]?
     /// Focus-clock seconds represented by this observation; older checks used 30.
     public var sampleDuration: Double?
+    public var distraction: FocusDistraction?
+    public var distractionApp: String?
     public var nudged = false
     public init(elapsed: Double, activity: FocusActivity, probability: Double = 0, confidence: Double = 0,
-                probabilities: [String: Double]? = nil, sampleDuration: Double? = nil) {
+                probabilities: [String: Double]? = nil, sampleDuration: Double? = nil,
+                distraction: FocusDistraction? = nil, distractionApp: String? = nil) {
         self.elapsed = elapsed; self.activity = activity
         self.probability = probability; self.confidence = confidence
         self.probabilities = probabilities
         self.sampleDuration = sampleDuration
+        self.distraction = distraction
+        self.distractionApp = distractionApp
+    }
+    public var distractionLabel: String? {
+        guard activity == .offTask else { return nil }
+        if let distraction, let distractionApp { return "\(distraction.label) · \(distractionApp)" }
+        return distraction?.label ?? distractionApp
     }
     public func estimate(for category: FocusActivity) -> Double? {
         guard [.onTask, .offTask, .uncertain].contains(activity),
@@ -142,6 +168,7 @@ public struct FocusDecision: Equatable {
     public let probability: Double
     public let confidence: Double
     public let probabilities: [String: Double]
+    public let distraction: FocusDistraction?
     public enum DecodeError: LocalizedError {
         case invalidAnswer
         public var errorDescription: String? { "Decisions returned an unsupported or malformed answer. This check was skipped." }
@@ -166,6 +193,9 @@ public struct FocusDecision: Equatable {
         }
         guard abs(values.values.reduce(0, +) - 1) < 0.02,
               let off = values["off_task"] else { throw DecodeError.invalidAnswer }
-        return FocusDecision(activity: activity, probability: off, confidence: confidence, probabilities: values)
+        let context = answers.first { $0["name"] as? String == "visible_activity" && $0["type"] as? String == "choice" }
+        let distraction = (context?["choice"] as? String).flatMap(FocusDistraction.init(rawValue:))
+        return FocusDecision(activity: activity, probability: off, confidence: confidence, probabilities: values,
+                             distraction: activity == .offTask ? distraction : nil)
     }
 }
