@@ -7,57 +7,138 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		06B2E110B83E28273DBE9900 /* BlueyCallActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED44E97C41C155D739BEFC4B /* BlueyCallActivity.swift */; };
 		0E02B38E4A5A909A93BA31C5 /* OFL-IBMPlex.txt in Resources */ = {isa = PBXBuildFile; fileRef = 1249C703A2D40793CA70D00E /* OFL-IBMPlex.txt */; };
 		0F5614BE9A55A8498E40F5F1 /* IBMPlexMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1C8AB3F441CA03CDA07FAE72 /* IBMPlexMono-Medium.ttf */; };
-		162BD56C1F6191020071D2A2 /* BlobShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35F3C44C342D6E869E6E3B4E /* BlobShape.swift */; };
+		13A96B95548DB6038ABE2137 /* ChatTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039AE65B82D4536454878ECE /* ChatTab.swift */; };
+		18AC80FBFB3FBC953051B412 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF9983CC6F68611E8657F5E /* Glass.swift */; };
+		1C5AC59D8D28F3A0B368D414 /* BlueyWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		20118A4DD64F733973CAE75B /* PomodoroTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1933884A6E3875A9825917BC /* PomodoroTab.swift */; };
 		229BAA56B4ED395457C442E0 /* QRPairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E88A21B39D4CF71F73A5737 /* QRPairingView.swift */; };
+		2664533ACA686D30BA241272 /* BlueyAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DB1EDE9CAA36DAA410F211 /* BlueyAudio.swift */; };
+		31C85F05EF22F9FFEFCBE8B5 /* BlobShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226F160BB3B194D1F5E50164 /* BlobShape.swift */; };
+		48C0D3B804C683C8ABD27987 /* BlueyWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D965803A61F4541BBDCE1FED /* BlueyWidgets.swift */; };
+		6087379B5787BCFDD5069177 /* WorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEC599958FAAE72C005CF36 /* WorkspaceModel.swift */; };
+		68D8CE32E101AC9E9F9650A4 /* WorkspaceRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA033C0808E6AC5ABDF16475 /* WorkspaceRootView.swift */; };
 		68F797C6A1D3EC7A83674C2A /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A762C0174AFF849BAD1A700 /* PairingView.swift */; };
 		6C5FF10BDE711139D00DB85A /* Fredoka.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D0EEE8F996B2F95804C1ECF8 /* Fredoka.ttf */; };
+		6C7000E336A3A00605D3291E /* BlueyCallActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED44E97C41C155D739BEFC4B /* BlueyCallActivity.swift */; };
 		6E03A7EBF9AAFFE4AC87ADE4 /* GooglyLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F71F206238433A6F710528B /* GooglyLink.swift */; };
 		6F0C91F5B7E911464464DB96 /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A31DC33ABF7869BDE4E0F6C /* Palette.swift */; };
 		6F0FE87629E2A7A20676322C /* ChunkRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED2232FD362786D7A5D38B8 /* ChunkRecorder.swift */; };
 		6FBD9F2B49D3FD5A78CC4EF1 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83073BF3A1F734ADC97138DF /* SessionStore.swift */; };
+		72699C9A4B4BCFC9D61E4D1C /* NotesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE07E841C5927326B4207FF /* NotesTab.swift */; };
 		772A196648CCCC476A2E36F7 /* OFL-Fredoka.txt in Resources */ = {isa = PBXBuildFile; fileRef = 020C853B32D37028CE040148 /* OFL-Fredoka.txt */; };
+		791F713CDBC7984560E689EB /* WorkspaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DBDAFA06EF8E2DBE92A488 /* WorkspaceChrome.swift */; };
+		84B0A32FACB3E28BDC245F5D /* StatsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BA485BC5F8F12AD341A9D8 /* StatsTab.swift */; };
 		89CA80F59236155E52CDA9D9 /* VoiceTurnBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9523CAD3450502FE203C1BBD /* VoiceTurnBuffer.swift */; };
+		8DE813206A885F2B608F98A0 /* BlueyBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D9C8C709C172870488B27D41 /* BlueyBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9C57F9AFA362287C2B93142E /* IBMPlexMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0EAD8A3C72D3899AD5CD2AA8 /* IBMPlexMono-Regular.ttf */; };
 		A3D88EE98BFEE3386A2C66DF /* BlueyAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1510156B478E99D7C4446DCA /* BlueyAppView.swift */; };
+		A5483D870CAC439E70591EAC /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46DD5058841EE2FB19872BB /* SampleHandler.swift */; };
+		B1C9F242A535AE4816E8E12B /* BlueyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F945FC02B251672C3E6D50 /* BlueyAvatar.swift */; };
 		B7F0853D97ECC4C28D0F6986 /* FocusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABAEED7339E96003AE49BEC7 /* FocusViews.swift */; };
 		C2D2BC58460F12FB0D562BB7 /* LiveVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD953582717D49F21FCD734 /* LiveVoice.swift */; };
+		C4FF7A70DE85B02D233B97AB /* CallSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778E6A815DD2C8595BD7653B /* CallSession.swift */; };
 		C54C1E0F76ECB8F94A9AEE70 /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB5A3FC752388C5F4235248 /* FocusSession.swift */; };
 		C763037B3F88C28F89EB61F0 /* MacLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44C98F6A89143BA9C926480 /* MacLink.swift */; };
+		C8E4E0637074586EBBA1B3DC /* TodosTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415B17799B82FDC9CB80DCCB /* TodosTab.swift */; };
+		CC3C2A41A35C8A24AB2718F1 /* PhoneWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFEC475DF92FF3548110652 /* PhoneWorkspace.swift */; };
 		CD8A48CB04D56A4BEF47D6AB /* GooglyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95CBBB828E99EC09708E98E /* GooglyApp.swift */; };
-		EADE24E60818A63E82366B42 /* FaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3AAA80221D679C8EAAE925 /* FaceView.swift */; };
+		CFC85CABDCC2FD22EBAE4D5B /* Workspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82D49B8F6D86AC716AAE9A7 /* Workspace.swift */; };
+		D68CE23A8F715C77350BEF54 /* PomodoroActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 060DB7B07D0BE5AC3D1B9C5B /* PomodoroActivity.swift */; };
+		DFB94B8173E3A951C6E69A19 /* CallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0F16C5628705326925EDDE0 /* CallView.swift */; };
 		F171BD7BAF58935750650B4D /* FocusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5028F9B110929B5CAC427465 /* FocusClient.swift */; };
 		F5C101DF403B8B41F401C234 /* SecurePairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C5BC31DC1FF4C0765EA0688 /* SecurePairing.swift */; };
+		F75183DA58C0B021C70ACBAF /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A31DC33ABF7869BDE4E0F6C /* Palette.swift */; };
 		FC47A19572BFD9F2386A85D3 /* IBMPlexSans.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AB333D12D3F4C506B3E49505 /* IBMPlexSans.ttf */; };
+		FD38A1690C52670A8773E8D1 /* WorkspaceStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = C446C2D5D000945D3BCE3FBA /* WorkspaceStats.swift */; };
+		FE46C651E4616AC39842D74B /* FaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D463E27CEBE894DE0997546 /* FaceView.swift */; };
 		FF7676A8F229F874417F4451 /* SoundButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65620B4F67CBB8E8821EBAC8 /* SoundButton.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A022477AE4AD98334307239A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 93F6E023CE34973B2DEC4386 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C5E30EF8247F39250540CE63;
+			remoteInfo = BlueyWidgets;
+		};
+		E74AD0994F071646FAE54638 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 93F6E023CE34973B2DEC4386 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1487060C2C7C60B71C38C552;
+			remoteInfo = BlueyBroadcast;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		0FB7167E724616252A704B95 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1C5AC59D8D28F3A0B368D414 /* BlueyWidgets.appex in Embed Foundation Extensions */,
+				8DE813206A885F2B608F98A0 /* BlueyBroadcast.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		020C853B32D37028CE040148 /* OFL-Fredoka.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Fredoka.txt"; sourceTree = "<group>"; };
+		039AE65B82D4536454878ECE /* ChatTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTab.swift; sourceTree = "<group>"; };
+		060DB7B07D0BE5AC3D1B9C5B /* PomodoroActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroActivity.swift; sourceTree = "<group>"; };
+		0DEC599958FAAE72C005CF36 /* WorkspaceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModel.swift; sourceTree = "<group>"; };
 		0EAD8A3C72D3899AD5CD2AA8 /* IBMPlexMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "IBMPlexMono-Regular.ttf"; sourceTree = "<group>"; };
 		1249C703A2D40793CA70D00E /* OFL-IBMPlex.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-IBMPlex.txt"; sourceTree = "<group>"; };
 		1510156B478E99D7C4446DCA /* BlueyAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyAppView.swift; sourceTree = "<group>"; };
+		1933884A6E3875A9825917BC /* PomodoroTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroTab.swift; sourceTree = "<group>"; };
 		1C8AB3F441CA03CDA07FAE72 /* IBMPlexMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "IBMPlexMono-Medium.ttf"; sourceTree = "<group>"; };
+		1D463E27CEBE894DE0997546 /* FaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceView.swift; sourceTree = "<group>"; };
+		226F160BB3B194D1F5E50164 /* BlobShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobShape.swift; sourceTree = "<group>"; };
+		28F945FC02B251672C3E6D50 /* BlueyAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyAvatar.swift; sourceTree = "<group>"; };
+		2AE07E841C5927326B4207FF /* NotesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesTab.swift; sourceTree = "<group>"; };
 		2CD953582717D49F21FCD734 /* LiveVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveVoice.swift; sourceTree = "<group>"; };
-		35F3C44C342D6E869E6E3B4E /* BlobShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobShape.swift; sourceTree = "<group>"; };
+		415B17799B82FDC9CB80DCCB /* TodosTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodosTab.swift; sourceTree = "<group>"; };
 		4A31DC33ABF7869BDE4E0F6C /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		4F71F206238433A6F710528B /* GooglyLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglyLink.swift; sourceTree = "<group>"; };
 		5028F9B110929B5CAC427465 /* FocusClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusClient.swift; sourceTree = "<group>"; };
 		65620B4F67CBB8E8821EBAC8 /* SoundButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundButton.swift; sourceTree = "<group>"; };
 		6C5BC31DC1FF4C0765EA0688 /* SecurePairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurePairing.swift; sourceTree = "<group>"; };
+		778E6A815DD2C8595BD7653B /* CallSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSession.swift; sourceTree = "<group>"; };
 		7A762C0174AFF849BAD1A700 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
+		7B5A0B10AF96C1855C4407E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		7ED2232FD362786D7A5D38B8 /* ChunkRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkRecorder.swift; sourceTree = "<group>"; };
 		83073BF3A1F734ADC97138DF /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		8E88A21B39D4CF71F73A5737 /* QRPairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRPairingView.swift; sourceTree = "<group>"; };
+		8FFEC475DF92FF3548110652 /* PhoneWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWorkspace.swift; sourceTree = "<group>"; };
 		9523CAD3450502FE203C1BBD /* VoiceTurnBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTurnBuffer.swift; sourceTree = "<group>"; };
-		AA3AAA80221D679C8EAAE925 /* FaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceView.swift; sourceTree = "<group>"; };
+		A0F16C5628705326925EDDE0 /* CallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallView.swift; sourceTree = "<group>"; };
+		A46DD5058841EE2FB19872BB /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		AB333D12D3F4C506B3E49505 /* IBMPlexSans.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexSans.ttf; sourceTree = "<group>"; };
 		ABAEED7339E96003AE49BEC7 /* FocusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusViews.swift; sourceTree = "<group>"; };
+		AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BlueyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B44C98F6A89143BA9C926480 /* MacLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLink.swift; sourceTree = "<group>"; };
+		B82D49B8F6D86AC716AAE9A7 /* Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace.swift; sourceTree = "<group>"; };
+		B9BA485BC5F8F12AD341A9D8 /* StatsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsTab.swift; sourceTree = "<group>"; };
+		BA033C0808E6AC5ABDF16475 /* WorkspaceRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceRootView.swift; sourceTree = "<group>"; };
+		BDF9983CC6F68611E8657F5E /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
+		C446C2D5D000945D3BCE3FBA /* WorkspaceStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceStats.swift; sourceTree = "<group>"; };
+		C5C492440ABBC32B6A22D163 /* BlueyBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BlueyBroadcast.entitlements; sourceTree = "<group>"; };
 		C95CBBB828E99EC09708E98E /* GooglyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglyApp.swift; sourceTree = "<group>"; };
 		D0EEE8F996B2F95804C1ECF8 /* Fredoka.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Fredoka.ttf; sourceTree = "<group>"; };
+		D965803A61F4541BBDCE1FED /* BlueyWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyWidgets.swift; sourceTree = "<group>"; };
+		D9C8C709C172870488B27D41 /* BlueyBroadcast.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BlueyBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DC7C65AB8589C0FC56D54226 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E884B5117C895A0439FDFE12 /* GooglyEyes.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GooglyEyes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		ED44E97C41C155D739BEFC4B /* BlueyCallActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyCallActivity.swift; sourceTree = "<group>"; };
+		F2DB1EDE9CAA36DAA410F211 /* BlueyAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyAudio.swift; sourceTree = "<group>"; };
+		F3DBDAFA06EF8E2DBE92A488 /* WorkspaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChrome.swift; sourceTree = "<group>"; };
 		FFB5A3FC752388C5F4235248 /* FocusSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -75,18 +156,54 @@
 			path = Fonts;
 			sourceTree = "<group>";
 		};
+		367D45300066EA25831FCDD6 /* Broadcast */ = {
+			isa = PBXGroup;
+			children = (
+				C5C492440ABBC32B6A22D163 /* BlueyBroadcast.entitlements */,
+				7B5A0B10AF96C1855C4407E6 /* Info.plist */,
+				A46DD5058841EE2FB19872BB /* SampleHandler.swift */,
+			);
+			name = Broadcast;
+			path = iOS/Broadcast;
+			sourceTree = "<group>";
+		};
+		4E4A2865153293B7FF109C8E /* Common */ = {
+			isa = PBXGroup;
+			children = (
+				ED44E97C41C155D739BEFC4B /* BlueyCallActivity.swift */,
+			);
+			name = Common;
+			path = iOS/Common;
+			sourceTree = "<group>";
+		};
 		4F61868F579B512B69F537A4 = {
 			isa = PBXGroup;
 			children = (
+				AA465BE9A3AF339DB5AC681A /* App */,
+				367D45300066EA25831FCDD6 /* Broadcast */,
+				4E4A2865153293B7FF109C8E /* Common */,
 				E8E2F33C9E110392983FDDDF /* Shared */,
 				8F41397BC1AEAB53CDE84BB3 /* Sources */,
+				5240C3EEF03B756DCF9ABD26 /* Widgets */,
 				554494C1002555E490E37EB6 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		5240C3EEF03B756DCF9ABD26 /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				D965803A61F4541BBDCE1FED /* BlueyWidgets.swift */,
+				DC7C65AB8589C0FC56D54226 /* Info.plist */,
+			);
+			name = Widgets;
+			path = iOS/Widgets;
 			sourceTree = "<group>";
 		};
 		554494C1002555E490E37EB6 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				D9C8C709C172870488B27D41 /* BlueyBroadcast.appex */,
+				AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */,
 				E884B5117C895A0439FDFE12 /* GooglyEyes.app */,
 			);
 			name = Products;
@@ -95,22 +212,44 @@
 		8F41397BC1AEAB53CDE84BB3 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				35F3C44C342D6E869E6E3B4E /* BlobShape.swift */,
 				1510156B478E99D7C4446DCA /* BlueyAppView.swift */,
+				F2DB1EDE9CAA36DAA410F211 /* BlueyAudio.swift */,
+				778E6A815DD2C8595BD7653B /* CallSession.swift */,
+				A0F16C5628705326925EDDE0 /* CallView.swift */,
 				7ED2232FD362786D7A5D38B8 /* ChunkRecorder.swift */,
-				AA3AAA80221D679C8EAAE925 /* FaceView.swift */,
 				5028F9B110929B5CAC427465 /* FocusClient.swift */,
 				ABAEED7339E96003AE49BEC7 /* FocusViews.swift */,
 				C95CBBB828E99EC09708E98E /* GooglyApp.swift */,
 				2CD953582717D49F21FCD734 /* LiveVoice.swift */,
 				B44C98F6A89143BA9C926480 /* MacLink.swift */,
 				7A762C0174AFF849BAD1A700 /* PairingView.swift */,
+				8FFEC475DF92FF3548110652 /* PhoneWorkspace.swift */,
+				060DB7B07D0BE5AC3D1B9C5B /* PomodoroActivity.swift */,
 				8E88A21B39D4CF71F73A5737 /* QRPairingView.swift */,
 				83073BF3A1F734ADC97138DF /* SessionStore.swift */,
 				65620B4F67CBB8E8821EBAC8 /* SoundButton.swift */,
 			);
 			name = Sources;
 			path = iOS/Sources;
+			sourceTree = "<group>";
+		};
+		AA465BE9A3AF339DB5AC681A /* App */ = {
+			isa = PBXGroup;
+			children = (
+				226F160BB3B194D1F5E50164 /* BlobShape.swift */,
+				28F945FC02B251672C3E6D50 /* BlueyAvatar.swift */,
+				039AE65B82D4536454878ECE /* ChatTab.swift */,
+				1D463E27CEBE894DE0997546 /* FaceView.swift */,
+				BDF9983CC6F68611E8657F5E /* Glass.swift */,
+				2AE07E841C5927326B4207FF /* NotesTab.swift */,
+				1933884A6E3875A9825917BC /* PomodoroTab.swift */,
+				B9BA485BC5F8F12AD341A9D8 /* StatsTab.swift */,
+				415B17799B82FDC9CB80DCCB /* TodosTab.swift */,
+				F3DBDAFA06EF8E2DBE92A488 /* WorkspaceChrome.swift */,
+				0DEC599958FAAE72C005CF36 /* WorkspaceModel.swift */,
+				BA033C0808E6AC5ABDF16475 /* WorkspaceRootView.swift */,
+			);
+			path = App;
 			sourceTree = "<group>";
 		};
 		E8E2F33C9E110392983FDDDF /* Shared */ = {
@@ -121,6 +260,8 @@
 				4A31DC33ABF7869BDE4E0F6C /* Palette.swift */,
 				6C5BC31DC1FF4C0765EA0688 /* SecurePairing.swift */,
 				9523CAD3450502FE203C1BBD /* VoiceTurnBuffer.swift */,
+				B82D49B8F6D86AC716AAE9A7 /* Workspace.swift */,
+				C446C2D5D000945D3BCE3FBA /* WorkspaceStats.swift */,
 				2F574059BA9C302B222352AA /* Fonts */,
 			);
 			path = Shared;
@@ -129,16 +270,36 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		1487060C2C7C60B71C38C552 /* BlueyBroadcast */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 42B6BFA9719F8D7D4C478DA0 /* Build configuration list for PBXNativeTarget "BlueyBroadcast" */;
+			buildPhases = (
+				44B254AEFCB1EF88C7A6EB5F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BlueyBroadcast;
+			packageProductDependencies = (
+			);
+			productName = BlueyBroadcast;
+			productReference = D9C8C709C172870488B27D41 /* BlueyBroadcast.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		B9CA7ABB7F3F613763C3DF65 /* GooglyEyes */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F407F923E98D1BD95427B3F2 /* Build configuration list for PBXNativeTarget "GooglyEyes" */;
 			buildPhases = (
 				6D0334CD98432B827CD4EE68 /* Sources */,
 				CA6B3F1718F83211F7C2367A /* Resources */,
+				0FB7167E724616252A704B95 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				3D5C4D10F2DF6BB1725BF3C5 /* PBXTargetDependency */,
+				7DF1D2E4F883B8A1C4FDE9F9 /* PBXTargetDependency */,
 			);
 			name = GooglyEyes;
 			packageProductDependencies = (
@@ -147,6 +308,23 @@
 			productReference = E884B5117C895A0439FDFE12 /* GooglyEyes.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C5E30EF8247F39250540CE63 /* BlueyWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4A0C1136C41022BD31C6B9ED /* Build configuration list for PBXNativeTarget "BlueyWidgets" */;
+			buildPhases = (
+				425D7772DAE2E79C10DF908E /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BlueyWidgets;
+			packageProductDependencies = (
+			);
+			productName = BlueyWidgets;
+			productReference = AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -154,16 +332,23 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 1600;
 				TargetAttributes = {
+					1487060C2C7C60B71C38C552 = {
+						DevelopmentTeam = NF73NSV867;
+						ProvisioningStyle = Automatic;
+					};
 					B9CA7ABB7F3F613763C3DF65 = {
+						DevelopmentTeam = NF73NSV867;
+						ProvisioningStyle = Automatic;
+					};
+					C5E30EF8247F39250540CE63 = {
 						DevelopmentTeam = NF73NSV867;
 						ProvisioningStyle = Automatic;
 					};
 				};
 			};
 			buildConfigurationList = FF71141EA9D22D07B4D3C0E4 /* Build configuration list for PBXProject "GooglyEyes" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -173,10 +358,13 @@
 			mainGroup = 4F61868F579B512B69F537A4;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 554494C1002555E490E37EB6 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				B9CA7ABB7F3F613763C3DF65 /* GooglyEyes */,
+				C5E30EF8247F39250540CE63 /* BlueyWidgets */,
+				1487060C2C7C60B71C38C552 /* BlueyBroadcast */,
 			);
 		};
 /* End PBXProject section */
@@ -198,38 +386,88 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		425D7772DAE2E79C10DF908E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				06B2E110B83E28273DBE9900 /* BlueyCallActivity.swift in Sources */,
+				48C0D3B804C683C8ABD27987 /* BlueyWidgets.swift in Sources */,
+				F75183DA58C0B021C70ACBAF /* Palette.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B254AEFCB1EF88C7A6EB5F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5483D870CAC439E70591EAC /* SampleHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6D0334CD98432B827CD4EE68 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				162BD56C1F6191020071D2A2 /* BlobShape.swift in Sources */,
+				31C85F05EF22F9FFEFCBE8B5 /* BlobShape.swift in Sources */,
 				A3D88EE98BFEE3386A2C66DF /* BlueyAppView.swift in Sources */,
+				2664533ACA686D30BA241272 /* BlueyAudio.swift in Sources */,
+				B1C9F242A535AE4816E8E12B /* BlueyAvatar.swift in Sources */,
+				6C7000E336A3A00605D3291E /* BlueyCallActivity.swift in Sources */,
+				C4FF7A70DE85B02D233B97AB /* CallSession.swift in Sources */,
+				DFB94B8173E3A951C6E69A19 /* CallView.swift in Sources */,
+				13A96B95548DB6038ABE2137 /* ChatTab.swift in Sources */,
 				6F0FE87629E2A7A20676322C /* ChunkRecorder.swift in Sources */,
-				EADE24E60818A63E82366B42 /* FaceView.swift in Sources */,
+				FE46C651E4616AC39842D74B /* FaceView.swift in Sources */,
 				F171BD7BAF58935750650B4D /* FocusClient.swift in Sources */,
 				C54C1E0F76ECB8F94A9AEE70 /* FocusSession.swift in Sources */,
 				B7F0853D97ECC4C28D0F6986 /* FocusViews.swift in Sources */,
+				18AC80FBFB3FBC953051B412 /* Glass.swift in Sources */,
 				CD8A48CB04D56A4BEF47D6AB /* GooglyApp.swift in Sources */,
 				6E03A7EBF9AAFFE4AC87ADE4 /* GooglyLink.swift in Sources */,
 				C2D2BC58460F12FB0D562BB7 /* LiveVoice.swift in Sources */,
 				C763037B3F88C28F89EB61F0 /* MacLink.swift in Sources */,
+				72699C9A4B4BCFC9D61E4D1C /* NotesTab.swift in Sources */,
 				68F797C6A1D3EC7A83674C2A /* PairingView.swift in Sources */,
 				6F0C91F5B7E911464464DB96 /* Palette.swift in Sources */,
+				CC3C2A41A35C8A24AB2718F1 /* PhoneWorkspace.swift in Sources */,
+				D68CE23A8F715C77350BEF54 /* PomodoroActivity.swift in Sources */,
+				20118A4DD64F733973CAE75B /* PomodoroTab.swift in Sources */,
 				229BAA56B4ED395457C442E0 /* QRPairingView.swift in Sources */,
 				F5C101DF403B8B41F401C234 /* SecurePairing.swift in Sources */,
 				6FBD9F2B49D3FD5A78CC4EF1 /* SessionStore.swift in Sources */,
 				FF7676A8F229F874417F4451 /* SoundButton.swift in Sources */,
+				84B0A32FACB3E28BDC245F5D /* StatsTab.swift in Sources */,
+				C8E4E0637074586EBBA1B3DC /* TodosTab.swift in Sources */,
 				89CA80F59236155E52CDA9D9 /* VoiceTurnBuffer.swift in Sources */,
+				CFC85CABDCC2FD22EBAE4D5B /* Workspace.swift in Sources */,
+				791F713CDBC7984560E689EB /* WorkspaceChrome.swift in Sources */,
+				6087379B5787BCFDD5069177 /* WorkspaceModel.swift in Sources */,
+				68D8CE32E101AC9E9F9650A4 /* WorkspaceRootView.swift in Sources */,
+				FD38A1690C52670A8773E8D1 /* WorkspaceStats.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3D5C4D10F2DF6BB1725BF3C5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C5E30EF8247F39250540CE63 /* BlueyWidgets */;
+			targetProxy = A022477AE4AD98334307239A /* PBXContainerItemProxy */;
+		};
+		7DF1D2E4F883B8A1C4FDE9F9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1487060C2C7C60B71C38C552 /* BlueyBroadcast */;
+			targetProxy = E74AD0994F071646FAE54638 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		162491EDBE256C73C67D86D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				BLUEY_BUNDLE_PREFIX = co.visionairy.googly;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -259,9 +497,11 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = NF73NSV867;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -291,10 +531,30 @@
 			};
 			name = Debug;
 		};
+		1E73C52D58E3FF2E268A7CF8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iOS/Widgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BLUEY_BUNDLE_PREFIX).phone.widgets";
+				PRODUCT_NAME = BlueyWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		532029C97673CE981E44E6A6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				BLUEY_BUNDLE_PREFIX = co.visionairy.googly;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -324,9 +584,11 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = NF73NSV867;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -349,20 +611,58 @@
 			};
 			name = Release;
 		};
+		57AE6BD31DA35846AA47A4A0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = iOS/Broadcast/BlueyBroadcast.entitlements;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iOS/Broadcast/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BLUEY_BUNDLE_PREFIX).phone.broadcast";
+				PRODUCT_NAME = BlueyBroadcast;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C84EF328BA433C05866C4352 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iOS/Widgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BLUEY_BUNDLE_PREFIX).phone.widgets";
+				PRODUCT_NAME = BlueyWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		D7EAB4FA030750C45EFADE99 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = iOS/Bluey.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = NF73NSV867;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.visionairy.googly.phone;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BLUEY_BUNDLE_PREFIX).phone";
 				PRODUCT_NAME = Bluey;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -373,18 +673,37 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = iOS/Bluey.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = NF73NSV867;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.visionairy.googly.phone;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BLUEY_BUNDLE_PREFIX).phone";
 				PRODUCT_NAME = Bluey;
 				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		FE3B597492FDCD78D245FBF7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = iOS/Broadcast/BlueyBroadcast.entitlements;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iOS/Broadcast/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BLUEY_BUNDLE_PREFIX).phone.broadcast";
+				PRODUCT_NAME = BlueyBroadcast;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
@@ -392,6 +711,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		42B6BFA9719F8D7D4C478DA0 /* Build configuration list for PBXNativeTarget "BlueyBroadcast" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57AE6BD31DA35846AA47A4A0 /* Debug */,
+				FE3B597492FDCD78D245FBF7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4A0C1136C41022BD31C6B9ED /* Build configuration list for PBXNativeTarget "BlueyWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C84EF328BA433C05866C4352 /* Debug */,
+				1E73C52D58E3FF2E268A7CF8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		F407F923E98D1BD95427B3F2 /* Build configuration list for PBXNativeTarget "GooglyEyes" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

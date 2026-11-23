@@ -12,6 +12,15 @@ MainActor.assumeIsolated {
         NSApplication.shared.run()
         return
     }
+    if CommandLine.arguments.contains("--workspace-preview") {
+        // Development: only the workspace window and web app, with throwaway data, alongside a running Bluey.
+        let app = NSApplication.shared
+        let preview = WorkspacePreview()
+        app.delegate = preview
+        app.setActivationPolicy(.regular)
+        app.run()
+        return
+    }
     let app = NSApplication.shared
     let delegate = AppDelegate()
     app.delegate = delegate
