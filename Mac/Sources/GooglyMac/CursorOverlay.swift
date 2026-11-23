@@ -163,19 +163,27 @@ final class CursorEngine {
         return true
     }
 
-    /// Where the phone sits, just below the bottom edge of the screen.
+    /// He lives in the MacBook's notch (no phone connected): home is the top middle of the screen.
+    var homeAtTop = false
+    /// Height of the notch / menu bar, so he peeks out just below it.
+    var topInset: CGFloat = 0
+
+    /// Where he lives: the phone just below the bottom edge, or the notch above the top edge.
     func phonePoint(in b: CGSize) -> CGPoint {
-        CGPoint(x: b.width * settings.phonePosition, y: b.height + b.height * 0.18)
+        homeAtTop ? CGPoint(x: b.width * 0.5, y: -b.height * 0.18)
+                  : CGPoint(x: b.width * settings.phonePosition, y: b.height + b.height * 0.18)
     }
 
-    /// Peeking up from the bottom edge, right above the phone.
+    /// Peeking out next to home: up from the bottom edge above the phone, or down from under the notch.
     func dockPoint(in b: CGSize) -> CGPoint {
-        CGPoint(x: b.width * settings.phonePosition, y: b.height - size * 0.42)
+        homeAtTop ? CGPoint(x: b.width * 0.5, y: topInset + size * 0.42)
+                  : CGPoint(x: b.width * settings.phonePosition, y: b.height - size * 0.42)
     }
 
-    /// Just below the bottom edge, out of sight, as if tucked into the phone.
+    /// Out of sight, tucked into the phone (below the screen) or into the notch (above it).
     func tuckedPoint(in b: CGSize) -> CGPoint {
-        CGPoint(x: b.width * settings.phonePosition, y: b.height + size * 0.35)
+        homeAtTop ? CGPoint(x: b.width * 0.5, y: -size * 0.35)
+                  : CGPoint(x: b.width * settings.phonePosition, y: b.height + size * 0.35)
     }
 
     private func goal() -> CGPoint {
@@ -245,7 +253,7 @@ final class CursorEngine {
         let distance = hypot(dx, dy)
         let pointing = !isHome
         let dock = dockPoint(in: bounds)
-        let fromHome = hypot(from.x - dock.x, from.y - dock.y) < size * 1.2 || from.y > bounds.height - 2
+        let fromHome = hypot(from.x - dock.x, from.y - dock.y) < size * 1.2 || (homeAtTop ? from.y < 2 : from.y > bounds.height - 2)
         guard distance > 0.5 else {
             flight = Flight(from: from, c1: from, c2: goal, to: goal, start: now, duration: 0, timing: .launch, pointing: pointing)
             return
@@ -337,12 +345,16 @@ final class CursorEngine {
         return CGPoint(x: tip.x + cos(angle + .pi / 4) * r, y: tip.y + sin(angle + .pi / 4) * r)
     }
 
+    /// What he looks at: his own cursor, or your mouse in follow mode (view coordinates, y down).
+    var lookPoint: CGPoint { mode == .following ? mouse : bodyCenter }
+
     /// What the phone's face should do: look at the cursor (or at your mouse in follow mode).
     func face(in bounds: CGSize, now: Double) -> FaceState {
         let phone = phonePoint(in: bounds)
-        let c = mode == .following ? mouse : bodyCenter
+        let c = lookPoint
         var gx = max(-1, min(1, (c.x - phone.x) / (bounds.width * 0.5)))
-        var gy = -max(0.15, min(1, (phone.y - c.y) / (bounds.height * 1.1)))
+        var gy = homeAtTop ? max(0.15, min(1, (c.y - phone.y) / (bounds.height * 1.1)))
+                           : -max(0.15, min(1, (phone.y - c.y) / (bounds.height * 1.1)))
         if let g = gazeOverride { gx = g.x; gy = g.y }
 
         let testing = now < talkUntil
@@ -458,6 +470,7 @@ final class CursorView: NSView {
     private let effects = CALayer()
     private let cursor = CALayer()
     private let body = TeardropLayer()
+    private let drone = DronePointer()
     private var eyes: [(socket: CALayer, white: CAShapeLayer, pupil: CAShapeLayer)] = []
     private let bubbles = CALayer()
     /// His speech bubble: a little cloud with a tail that points at his cursor (or down at the phone).
@@ -497,7 +510,7 @@ final class CursorView: NSView {
         stringLayer.lineWidth = 2.5
         stringLayer.strokeColor = NSColor(hex: Palette.berry1, alpha: 0.7).cgColor
         trailLayer.fillColor = NSColor(hex: Palette.berry2, alpha: 1).cgColor
-        for l in [stringLayer, trailLayer, effects, cursor, bubbles, speech] { root.addSublayer(l) }
+        for l in [stringLayer, trailLayer, effects, drone.ring, drone.cone, cursor, drone.root, bubbles, speech] { root.addSublayer(l) }
 
         cursor.anchorPoint = CGPoint(x: 0, y: 1)  // the tip: top-left corner in y-up space
         cursor.addSublayer(body)
@@ -516,12 +529,12 @@ final class CursorView: NSView {
         // A clean white cloud with a faint blueberry tint at the bottom and a berry outline. No glow.
         speech.fillColor = NSColor.white.cgColor
         speech.opacity = 0
-        speechFill.colors = [NSColor.white.cgColor, NSColor(hex: 0xEEF0FF).cgColor]
+        speechFill.colors = [NSColor.white.cgColor, NSColor(hex: 0xF2F8FF).cgColor]  // Keramik: white with a cool tint
         speechFill.startPoint = CGPoint(x: 0.5, y: 1)
         speechFill.endPoint = CGPoint(x: 0.5, y: 0)
         speechFill.mask = speechFillMask
         speechBorder.fillColor = nil
-        speechBorder.strokeColor = NSColor(hex: Palette.berry2, alpha: 1).cgColor
+        speechBorder.strokeColor = NSColor(hex: Keramik.glow, alpha: 1).cgColor
         speechBorder.lineWidth = 2.5
         speechBorder.lineJoin = .round
         speechText.isWrapped = true
@@ -605,6 +618,8 @@ final class CursorView: NSView {
         cursor.transform = CATransform3DConcat(CATransform3DMakeScale(squish, squish, 1),
                                                CATransform3DMakeRotation(-engine.angle, 0, 0, 1))
         cursor.opacity = Float(visible ? engine.opacity : 0)
+        let droneStyle = settings.pointerStyle == .drone
+        if droneStyle { cursor.opacity = 0 }
 
         // Its eyes look where it's heading, and back at the tip when it stops. They blink now and then.
         let v = engine.velocity
@@ -625,8 +640,15 @@ final class CursorView: NSView {
             eye.socket.transform = CATransform3DMakeScale(1, blinking ? 0.12 : 1, 1)
         }
 
-        renderTrail(now: now, speed: speed, visible: visible)
-        renderString(now: now, dt: dt, visible: visible)
+        if droneStyle {
+            drone.update(tip: engine.tip, target: engine.isHome ? nil : speechTarget, pointing: !engine.isHome && speed < 60,
+                         velocity: v, size: engine.size, now: now, dt: dt, blinking: blinking, look: look,
+                         opacity: Float(visible ? engine.opacity : 0), bounds: bounds.size, scale: scale)
+        } else {
+            drone.hide()
+        }
+        renderTrail(now: now, speed: speed, visible: visible && !droneStyle)
+        renderString(now: now, dt: dt, visible: visible && !droneStyle)
         renderBubbles(now: now)
         renderSpeech(now: now)
     }
@@ -672,7 +694,8 @@ final class CursorView: NSView {
             return
         }
         // Like a balloon string held by the phone: it trails behind with a little slack and sway.
-        let from = CGPoint(x: bounds.width * Settings.shared.phonePosition, y: bounds.height + 4)
+        let from = engine.homeAtTop ? CGPoint(x: bounds.width * 0.5, y: -4)
+                                    : CGPoint(x: bounds.width * Settings.shared.phonePosition, y: bounds.height + 4)
         let to = engine.bodyCenter
         let distance = hypot(to.x - from.x, to.y - from.y)
         let slack = max(0, 160 - distance * 0.12)
@@ -858,7 +881,8 @@ final class CursorView: NSView {
         if engine.opacity > 0.1 {
             anchor = CGPoint(x: engine.tip.x + engine.size * 1.05, y: engine.tip.y - engine.size * 0.1)
         } else {
-            anchor = CGPoint(x: bounds.width * Settings.shared.phonePosition, y: bounds.height - engine.size * 1.3)
+            anchor = engine.homeAtTop ? CGPoint(x: bounds.width * 0.5, y: engine.topInset + engine.size * 1.3)
+                                      : CGPoint(x: bounds.width * Settings.shared.phonePosition, y: bounds.height - engine.size * 1.3)
         }
         activeBubbles.removeAll { bubble in
             let age = now - bubble.born
@@ -957,7 +981,17 @@ final class CursorView: NSView {
         var tailUp = false
         // Below the cursor (which hangs down-right from its tip), for when there's no room above.
         let belowCursor = CGPoint(x: engine.tip.x + engine.size * 0.5, y: engine.tip.y + engine.size * 1.35)
-        if pointing {
+        if pointing, Settings.shared.pointerStyle == .drone {
+            // Above the drone (which hovers above the thing); below the thing when there's no room up there.
+            target = CGPoint(x: drone.topCenter.x, y: drone.topCenter.y - 2)
+            origin = CGPoint(x: target.x - size.width / 2, y: target.y - tail - size.height)
+            if origin.y < margin {
+                let thing = speechTarget ?? CGRect(x: engine.tip.x - 12, y: engine.tip.y - 12, width: 24, height: 24)
+                target = CGPoint(x: thing.midX, y: thing.maxY + 8)
+                origin = CGPoint(x: target.x - size.width / 2, y: target.y + tail)
+                tailUp = true
+            }
+        } else if pointing {
             let thing = speechTarget ?? CGRect(x: engine.tip.x - 12, y: engine.tip.y - 30, width: 24, height: 24)
             target = CGPoint(x: thing.midX, y: thing.minY - 10)
             origin = CGPoint(x: target.x - size.width / 2, y: target.y - tail - size.height)
@@ -966,6 +1000,11 @@ final class CursorView: NSView {
                 origin = CGPoint(x: target.x - size.width / 2, y: target.y + tail)
                 tailUp = true
             }
+        } else if engine.homeAtTop {
+            // Hanging under the notch, tail pointing up at him.
+            target = CGPoint(x: bounds.width * 0.5, y: engine.topInset + 6)
+            origin = CGPoint(x: target.x - size.width / 2, y: target.y + tail)
+            tailUp = true
         } else {
             target = CGPoint(x: bounds.width * Settings.shared.phonePosition, y: bounds.height - engine.size * 0.9)
             origin = CGPoint(x: target.x - size.width / 2, y: target.y - tail - size.height)
@@ -1032,6 +1071,8 @@ final class CursorOverlay: NSObject {
 
     /// Called every frame with the face the phone should show.
     var onFace: ((FaceState) -> Void)?
+    /// Where he's looking, in global screen coordinates (y up), every frame.
+    var onLook: ((CGPoint) -> Void)?
 
     var mode: CursorMode {
         get { view.engine.mode }
@@ -1042,6 +1083,21 @@ final class CursorOverlay: NSObject {
     var idleMode: CursorMode { Settings.shared.followMouse ? .following : .docked }
 
     func goHome() { mode = idleMode }
+
+    /// Hides the whole overlay (pointer and bubbles) or brings it back.
+    func setHidden(_ hidden: Bool) {
+        if hidden { window?.orderOut(nil) } else { window?.orderFrontRegardless() }
+    }
+
+    /// Moves his home between the phone (bottom edge) and the notch (top middle).
+    func setHome(atTop: Bool) {
+        let engine = view.engine
+        let inset = NSScreen.screens.first.map { max($0.safeAreaInsets.top, NSStatusBar.system.thickness) } ?? 24
+        guard engine.homeAtTop != atTop || engine.topInset != inset else { return }
+        engine.homeAtTop = atTop
+        engine.topInset = inset
+        if engine.isHome { goHome() }
+    }
 
     func start() {
         mode = idleMode
@@ -1087,5 +1143,7 @@ final class CursorOverlay: NSObject {
         let f = window.frame
         view.step(dt: dt, now: now, mouse: CGPoint(x: m.x - f.minX, y: f.maxY - m.y))
         onFace?(view.engine.face(in: view.bounds.size, now: now))
+        let look = view.engine.lookPoint
+        onLook?(CGPoint(x: f.minX + look.x, y: f.maxY - look.y))
     }
 }

@@ -10,7 +10,7 @@ struct FocusFaceHUD: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(focus.current.flatMap { $0.status == .ended ? nil : $0.task } ?? "What's the mission?")
+                    Text(focus.rest != nil ? "Break time ☕︎" : (focus.current.flatMap { $0.status == .ended ? nil : $0.task } ?? "What's the mission?"))
                         .font(.fredoka(22)).lineLimit(2)
                     Text(status).font(.plexMono(10)).foregroundStyle(.white.opacity(0.65))
                     if focus.developerMode {
@@ -31,6 +31,8 @@ struct FocusFaceHUD: View {
                 HStack(spacing: 2) {
                     if !link.connected {
                         icon("qrcode.viewfinder", label: "Pair Mac", action: pair)
+                    } else if focus.rest != nil {
+                        icon("forward.end.fill", label: "Skip break") { focus.command("focusSkipBreak") }
                     } else if let session = focus.current, session.status != .ended {
                         icon(session.status == .running ? "pause.fill" : "play.fill",
                              label: session.status == .running ? "Pause focus" : "Resume focus") {
@@ -75,7 +77,8 @@ struct FocusFaceHUD: View {
         .accessibilityLabel(label)
     }
     private var countdown: Double {
-        focus.current.flatMap { $0.status == .ended ? nil : $0.remaining } ?? 1800
+        if let rest = focus.rest { return rest.remaining }
+        return focus.current.flatMap { $0.status == .ended ? nil : $0.remaining } ?? focus.pomodoro.focusMinutes * 60
     }
     private var feedback: String { focus.nudgeText.isEmpty ? live.feedback : focus.nudgeText }
     private var voiceIcon: String {
@@ -100,6 +103,7 @@ struct FocusFaceHUD: View {
     }
     private var status: String {
         guard link.connected else { return "Pair your Mac to focus together" }
+        if let rest = focus.rest { return "\(rest.title) · stand up, stretch, look away from the screen" }
         guard let session = focus.current, session.status != .ended else { return "Hold Bluey and describe a task" }
         guard focus.fresh else { return "Connection lost · monitoring will pause" }
         if session.status == .paused { return "Paused" }
@@ -118,7 +122,7 @@ struct FocusDashboard: View {
     @ObservedObject var link: MacLink
     @Environment(\.dismiss) private var dismiss
     @State private var task = ""
-    @State private var minutes = 30.0
+    @State private var minutes = 25.0
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -157,10 +161,22 @@ struct FocusDashboard: View {
                         TextField("What are we working on?", text: $task).textFieldStyle(.roundedBorder)
                             .accessibilityIdentifier("focusTask")
                         Stepper("\(Int(minutes)) minutes", value: $minutes, in: 1...240, step: 5)
+                            .onAppear { minutes = focus.pomodoro.enabled ? focus.pomodoro.focusMinutes : 30 }
+                            .onChange(of: focus.pomodoro.focusMinutes) { _, value in minutes = value }
                         Button("Start focus") { focus.command("focusStart", task: task, minutes: minutes) }
                             .buttonStyle(.borderedProminent).disabled(task.trimmingCharacters(in: .whitespaces).isEmpty || !link.connected)
                             .accessibilityIdentifier("startFocus")
                     }
+                    if let rest = focus.rest {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(rest.title) · \(FocusSession.clock(rest.remaining))").font(.fredoka(24)).foregroundStyle(Color(hex: 0x5BE49B))
+                            Text("Stand up, move, drink some water, look into the distance. Bluey will call you back for round \(focus.completedRounds + 1).")
+                                .font(.plexSans(13)).foregroundStyle(.secondary)
+                            Button("Skip break") { focus.command("focusSkipBreak") }.buttonStyle(.bordered)
+                        }
+                        .padding(16).background(Color(hex: 0x5BE49B).opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    PomodoroSettingsView(focus: focus).disabled(!link.connected)
                     if !focus.message.isEmpty { Text(focus.message).font(.plexSans(13)).foregroundStyle(.secondary) }
                     Text("While focusing, Bluey sends your main Mac display, task, elapsed time, idle duration and recent check results to OpenAI every \(focus.developerMode ? 10 : 30) real seconds. Brief detours are fine. Stillness isn't distraction.")
                         .font(.plexSans(13)).foregroundStyle(.secondary)
@@ -193,6 +209,11 @@ private struct FocusSummary: View {
             }
             Text("\(session.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(FocusSession.clock(session.elapsed)) active")
                 .font(.plexMono(11)).foregroundStyle(.secondary)
+            if let activity = session.activity {
+                Text("ActivityWatch: \(ActivitySummary.duration(activity.activeSeconds)) keyboard/mouse time, \(ActivitySummary.duration(activity.afkSeconds)) away"
+                     + (activity.apps.isEmpty ? "" : " · " + activity.apps.prefix(3).map { "\($0.name) \(ActivitySummary.duration($0.seconds))" }.joined(separator: ", ")))
+                    .font(.plexMono(11)).foregroundStyle(.secondary)
+            }
             Button { inspect("all") } label: {
                 FocusTimeline(session: session).frame(height: 40)
             }.buttonStyle(.plain).accessibilityLabel("Inspect focus checks")
@@ -339,5 +360,59 @@ struct FocusTimeline: View {
             }
         }.overlay(Rectangle().stroke(.white.opacity(0.3), lineWidth: 1))
             .accessibilityLabel("Focus timeline: green on task, peach off task, grey unknown")
+    }
+}
+
+/// Pomodoro rhythm on the phone: on/off, lengths, presets and auto-start switches. Saved on the Mac.
+private struct PomodoroSettingsView: View {
+    @ObservedObject var focus: FocusClient
+
+    var body: some View {
+        let p = focus.pomodoro
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Pomodoro").font(.fredoka(22))
+                Spacer()
+                Toggle("Pomodoro", isOn: binding(\.enabled)).labelsHidden()
+            }
+            Text(p.enabled ? "After each focus round Bluey sends you on a break, and after \(p.roundsBeforeLongBreak) rounds on a long one. Round \(focus.completedRounds + 1) is next."
+                           : "Off: focus sessions simply end, no breaks.")
+                .font(.plexSans(12)).foregroundStyle(.secondary)
+            if p.enabled {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        ForEach(PomodoroRhythm.presets, id: \.name) { preset in
+                            Button(preset.name) {
+                                var s = preset.settings
+                                s.autoStartBreaks = p.autoStartBreaks; s.autoStartFocus = p.autoStartFocus
+                                focus.setPomodoro(s)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(p.sameRhythm(preset.settings) ? Color(hex: Palette.berry1) : .gray)
+                        }
+                    }
+                }
+                Stepper("Focus: \(Int(p.focusMinutes)) min", value: number(\.focusMinutes), in: 1...240, step: 5)
+                Stepper("Break: \(Int(p.shortBreakMinutes)) min", value: number(\.shortBreakMinutes), in: 1...60)
+                Stepper("Long break: \(Int(p.longBreakMinutes)) min", value: number(\.longBreakMinutes), in: 1...120, step: 5)
+                Stepper("Long break after \(p.roundsBeforeLongBreak) rounds", value: Binding(
+                    get: { p.roundsBeforeLongBreak }, set: { var s = p; s.roundsBeforeLongBreak = $0; focus.setPomodoro(s) }), in: 1...12)
+                Toggle("Start breaks automatically", isOn: binding(\.autoStartBreaks))
+                Toggle("Start the next round automatically", isOn: binding(\.autoStartFocus))
+                if focus.rest == nil, focus.current.map({ $0.status != .ended }) == true {
+                    Button("Take a break now") { focus.command("focusBreak") }.buttonStyle(.bordered)
+                }
+            }
+        }
+        .font(.plexSans(14))
+        .padding(16).background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func binding(_ key: WritableKeyPath<PomodoroRhythm, Bool>) -> Binding<Bool> {
+        Binding(get: { focus.pomodoro[keyPath: key] }, set: { var s = focus.pomodoro; s[keyPath: key] = $0; focus.setPomodoro(s) })
+    }
+
+    private func number(_ key: WritableKeyPath<PomodoroRhythm, Double>) -> Binding<Double> {
+        Binding(get: { focus.pomodoro[keyPath: key] }, set: { var s = focus.pomodoro; s[keyPath: key] = $0; focus.setPomodoro(s) })
     }
 }

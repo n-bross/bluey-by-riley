@@ -7,38 +7,51 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		032520AA18487BFA0D3F7C06 /* DMSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3F158EC15BABAAD257FC577B /* DMSans-Regular.ttf */; };
 		06B2E110B83E28273DBE9900 /* BlueyCallActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED44E97C41C155D739BEFC4B /* BlueyCallActivity.swift */; };
 		0E02B38E4A5A909A93BA31C5 /* OFL-IBMPlex.txt in Resources */ = {isa = PBXBuildFile; fileRef = 1249C703A2D40793CA70D00E /* OFL-IBMPlex.txt */; };
 		0F5614BE9A55A8498E40F5F1 /* IBMPlexMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1C8AB3F441CA03CDA07FAE72 /* IBMPlexMono-Medium.ttf */; };
 		13A96B95548DB6038ABE2137 /* ChatTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039AE65B82D4536454878ECE /* ChatTab.swift */; };
 		18AC80FBFB3FBC953051B412 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF9983CC6F68611E8657F5E /* Glass.swift */; };
+		1A5A63320A44D0CA52E3A40A /* HubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 382567E0278FD16B65498AEA /* HubClient.swift */; };
 		1C5AC59D8D28F3A0B368D414 /* BlueyWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		20118A4DD64F733973CAE75B /* PomodoroTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1933884A6E3875A9825917BC /* PomodoroTab.swift */; };
 		229BAA56B4ED395457C442E0 /* QRPairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E88A21B39D4CF71F73A5737 /* QRPairingView.swift */; };
-		2664533ACA686D30BA241272 /* BlueyAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DB1EDE9CAA36DAA410F211 /* BlueyAudio.swift */; };
+		2BE71ADC1B38EB1C0C7C8BD1 /* Pomodoro.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB8136F2C46D30D8774E3EC /* Pomodoro.swift */; };
 		31C85F05EF22F9FFEFCBE8B5 /* BlobShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226F160BB3B194D1F5E50164 /* BlobShape.swift */; };
+		415A152674D5DB1F53408376 /* NotesSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B13603392444280D432F5CD7 /* NotesSync.swift */; };
 		48C0D3B804C683C8ABD27987 /* BlueyWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D965803A61F4541BBDCE1FED /* BlueyWidgets.swift */; };
+		4AEEC850D83F7A1245CB4706 /* DMSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 70DAEA7A2217022DF5D0BB22 /* DMSans-Bold.ttf */; };
 		6087379B5787BCFDD5069177 /* WorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEC599958FAAE72C005CF36 /* WorkspaceModel.swift */; };
+		63254595DAF92EDD1EEF4391 /* keramik-avatar.js in Resources */ = {isa = PBXBuildFile; fileRef = 1F05D570EC65415B1C06723D /* keramik-avatar.js */; };
+		67934D847C9B182DB08E8763 /* BlueyAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 475EE52E8251FB9A91119BA4 /* BlueyAudio.swift */; };
 		68D8CE32E101AC9E9F9650A4 /* WorkspaceRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA033C0808E6AC5ABDF16475 /* WorkspaceRootView.swift */; };
 		68F797C6A1D3EC7A83674C2A /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A762C0174AFF849BAD1A700 /* PairingView.swift */; };
+		691C5772FA6D8BF7F4A4FA0C /* HubTodosNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C2A75561EB16C7A231CFBB /* HubTodosNotes.swift */; };
 		6C5FF10BDE711139D00DB85A /* Fredoka.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D0EEE8F996B2F95804C1ECF8 /* Fredoka.ttf */; };
 		6C7000E336A3A00605D3291E /* BlueyCallActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED44E97C41C155D739BEFC4B /* BlueyCallActivity.swift */; };
+		6DE7ED433C5215277E24CD40 /* HubRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5B9950BF26CE913FAF4B35B /* HubRootView.swift */; };
 		6E03A7EBF9AAFFE4AC87ADE4 /* GooglyLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F71F206238433A6F710528B /* GooglyLink.swift */; };
 		6F0C91F5B7E911464464DB96 /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A31DC33ABF7869BDE4E0F6C /* Palette.swift */; };
-		6F0FE87629E2A7A20676322C /* ChunkRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED2232FD362786D7A5D38B8 /* ChunkRecorder.swift */; };
 		6FBD9F2B49D3FD5A78CC4EF1 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83073BF3A1F734ADC97138DF /* SessionStore.swift */; };
 		72699C9A4B4BCFC9D61E4D1C /* NotesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE07E841C5927326B4207FF /* NotesTab.swift */; };
+		735A7DD1D622AC3DF06418CC /* HermesState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A2088B61E3A6DBFC2EEEEE /* HermesState.swift */; };
 		772A196648CCCC476A2E36F7 /* OFL-Fredoka.txt in Resources */ = {isa = PBXBuildFile; fileRef = 020C853B32D37028CE040148 /* OFL-Fredoka.txt */; };
 		791F713CDBC7984560E689EB /* WorkspaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DBDAFA06EF8E2DBE92A488 /* WorkspaceChrome.swift */; };
 		84B0A32FACB3E28BDC245F5D /* StatsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BA485BC5F8F12AD341A9D8 /* StatsTab.swift */; };
 		89CA80F59236155E52CDA9D9 /* VoiceTurnBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9523CAD3450502FE203C1BBD /* VoiceTurnBuffer.swift */; };
 		8DE813206A885F2B608F98A0 /* BlueyBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D9C8C709C172870488B27D41 /* BlueyBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9133702F3BE9075FBF70C007 /* HermesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 295C3ED9BA54A9A03DD5CF49 /* HermesClient.swift */; };
+		99BB01CF5598AF3396DEEAEA /* OFL-DMSans.txt in Resources */ = {isa = PBXBuildFile; fileRef = B823087412DE1BCABA8A1D3F /* OFL-DMSans.txt */; };
 		9C57F9AFA362287C2B93142E /* IBMPlexMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0EAD8A3C72D3899AD5CD2AA8 /* IBMPlexMono-Regular.ttf */; };
 		A3D88EE98BFEE3386A2C66DF /* BlueyAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1510156B478E99D7C4446DCA /* BlueyAppView.swift */; };
 		A5483D870CAC439E70591EAC /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46DD5058841EE2FB19872BB /* SampleHandler.swift */; };
+		AEC263BAA6F682C7084CF42D /* HubThreads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BA55D21847413604146489 /* HubThreads.swift */; };
+		AF36CBC0F9F65043C0E3FBB5 /* KeramikAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DAB077A345B8E38071C921 /* KeramikAvatar.swift */; };
+		B044534E32B5458A52510C8A /* ChunkRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FCEA6C5E452C1B0E9BBDC1 /* ChunkRecorder.swift */; };
 		B1C9F242A535AE4816E8E12B /* BlueyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F945FC02B251672C3E6D50 /* BlueyAvatar.swift */; };
+		B7776B449323D43A0746B903 /* DMSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C1CDABEF6D96D636BB56B08F /* DMSans-Medium.ttf */; };
 		B7F0853D97ECC4C28D0F6986 /* FocusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABAEED7339E96003AE49BEC7 /* FocusViews.swift */; };
-		C2D2BC58460F12FB0D562BB7 /* LiveVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD953582717D49F21FCD734 /* LiveVoice.swift */; };
 		C4FF7A70DE85B02D233B97AB /* CallSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778E6A815DD2C8595BD7653B /* CallSession.swift */; };
 		C54C1E0F76ECB8F94A9AEE70 /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB5A3FC752388C5F4235248 /* FocusSession.swift */; };
 		C763037B3F88C28F89EB61F0 /* MacLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44C98F6A89143BA9C926480 /* MacLink.swift */; };
@@ -46,8 +59,12 @@
 		CC3C2A41A35C8A24AB2718F1 /* PhoneWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFEC475DF92FF3548110652 /* PhoneWorkspace.swift */; };
 		CD8A48CB04D56A4BEF47D6AB /* GooglyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95CBBB828E99EC09708E98E /* GooglyApp.swift */; };
 		CFC85CABDCC2FD22EBAE4D5B /* Workspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82D49B8F6D86AC716AAE9A7 /* Workspace.swift */; };
+		D4D2D129EC16C6C8504F58E6 /* HubTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F188A8DE741AC45E788BA4FE /* HubTheme.swift */; };
 		D68CE23A8F715C77350BEF54 /* PomodoroActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 060DB7B07D0BE5AC3D1B9C5B /* PomodoroActivity.swift */; };
 		DFB94B8173E3A951C6E69A19 /* CallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0F16C5628705326925EDDE0 /* CallView.swift */; };
+		E455D039FC051E69CF6A9D6F /* LiveVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3BEDFC39151D3055B604B2 /* LiveVoice.swift */; };
+		E6C82A0AF17C630C38D3817D /* keramik-3d.js in Resources */ = {isa = PBXBuildFile; fileRef = 79D7C3C12936DB167CA356AC /* keramik-3d.js */; };
+		E8AF573E8BBA9219C4F616F6 /* three.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 693FD492D9A77112303F60A1 /* three.min.js */; };
 		F171BD7BAF58935750650B4D /* FocusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5028F9B110929B5CAC427465 /* FocusClient.swift */; };
 		F5C101DF403B8B41F401C234 /* SecurePairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C5BC31DC1FF4C0765EA0688 /* SecurePairing.swift */; };
 		F75183DA58C0B021C70ACBAF /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A31DC33ABF7869BDE4E0F6C /* Palette.swift */; };
@@ -55,6 +72,7 @@
 		FD38A1690C52670A8773E8D1 /* WorkspaceStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = C446C2D5D000945D3BCE3FBA /* WorkspaceStats.swift */; };
 		FE46C651E4616AC39842D74B /* FaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D463E27CEBE894DE0997546 /* FaceView.swift */; };
 		FF7676A8F229F874417F4451 /* SoundButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65620B4F67CBB8E8821EBAC8 /* SoundButton.swift */; };
+		FFA73A4E782A8F06313917B4 /* HermesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95479E04AAF0E5C1FB0F7A4D /* HermesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +111,7 @@
 		020C853B32D37028CE040148 /* OFL-Fredoka.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Fredoka.txt"; sourceTree = "<group>"; };
 		039AE65B82D4536454878ECE /* ChatTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTab.swift; sourceTree = "<group>"; };
 		060DB7B07D0BE5AC3D1B9C5B /* PomodoroActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroActivity.swift; sourceTree = "<group>"; };
+		07BA55D21847413604146489 /* HubThreads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubThreads.swift; sourceTree = "<group>"; };
 		0DEC599958FAAE72C005CF36 /* WorkspaceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModel.swift; sourceTree = "<group>"; };
 		0EAD8A3C72D3899AD5CD2AA8 /* IBMPlexMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "IBMPlexMono-Regular.ttf"; sourceTree = "<group>"; };
 		1249C703A2D40793CA70D00E /* OFL-IBMPlex.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-IBMPlex.txt"; sourceTree = "<group>"; };
@@ -100,45 +119,62 @@
 		1933884A6E3875A9825917BC /* PomodoroTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroTab.swift; sourceTree = "<group>"; };
 		1C8AB3F441CA03CDA07FAE72 /* IBMPlexMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "IBMPlexMono-Medium.ttf"; sourceTree = "<group>"; };
 		1D463E27CEBE894DE0997546 /* FaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceView.swift; sourceTree = "<group>"; };
+		1F05D570EC65415B1C06723D /* keramik-avatar.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "keramik-avatar.js"; sourceTree = "<group>"; };
 		226F160BB3B194D1F5E50164 /* BlobShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobShape.swift; sourceTree = "<group>"; };
 		28F945FC02B251672C3E6D50 /* BlueyAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyAvatar.swift; sourceTree = "<group>"; };
+		295C3ED9BA54A9A03DD5CF49 /* HermesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesClient.swift; sourceTree = "<group>"; };
 		2AE07E841C5927326B4207FF /* NotesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesTab.swift; sourceTree = "<group>"; };
-		2CD953582717D49F21FCD734 /* LiveVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveVoice.swift; sourceTree = "<group>"; };
+		382567E0278FD16B65498AEA /* HubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubClient.swift; sourceTree = "<group>"; };
+		3F158EC15BABAAD257FC577B /* DMSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Regular.ttf"; sourceTree = "<group>"; };
 		415B17799B82FDC9CB80DCCB /* TodosTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodosTab.swift; sourceTree = "<group>"; };
+		475EE52E8251FB9A91119BA4 /* BlueyAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyAudio.swift; sourceTree = "<group>"; };
+		48FCEA6C5E452C1B0E9BBDC1 /* ChunkRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkRecorder.swift; sourceTree = "<group>"; };
 		4A31DC33ABF7869BDE4E0F6C /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		4F71F206238433A6F710528B /* GooglyLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglyLink.swift; sourceTree = "<group>"; };
 		5028F9B110929B5CAC427465 /* FocusClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusClient.swift; sourceTree = "<group>"; };
+		51A2088B61E3A6DBFC2EEEEE /* HermesState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesState.swift; sourceTree = "<group>"; };
+		5A3BEDFC39151D3055B604B2 /* LiveVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveVoice.swift; sourceTree = "<group>"; };
+		5AB8136F2C46D30D8774E3EC /* Pomodoro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pomodoro.swift; sourceTree = "<group>"; };
 		65620B4F67CBB8E8821EBAC8 /* SoundButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundButton.swift; sourceTree = "<group>"; };
+		693FD492D9A77112303F60A1 /* three.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = three.min.js; sourceTree = "<group>"; };
 		6C5BC31DC1FF4C0765EA0688 /* SecurePairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurePairing.swift; sourceTree = "<group>"; };
+		70DAEA7A2217022DF5D0BB22 /* DMSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Bold.ttf"; sourceTree = "<group>"; };
 		778E6A815DD2C8595BD7653B /* CallSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSession.swift; sourceTree = "<group>"; };
+		79D7C3C12936DB167CA356AC /* keramik-3d.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "keramik-3d.js"; sourceTree = "<group>"; };
 		7A762C0174AFF849BAD1A700 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		7B5A0B10AF96C1855C4407E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		7ED2232FD362786D7A5D38B8 /* ChunkRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkRecorder.swift; sourceTree = "<group>"; };
 		83073BF3A1F734ADC97138DF /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		8E88A21B39D4CF71F73A5737 /* QRPairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRPairingView.swift; sourceTree = "<group>"; };
 		8FFEC475DF92FF3548110652 /* PhoneWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWorkspace.swift; sourceTree = "<group>"; };
 		9523CAD3450502FE203C1BBD /* VoiceTurnBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTurnBuffer.swift; sourceTree = "<group>"; };
+		95479E04AAF0E5C1FB0F7A4D /* HermesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesView.swift; sourceTree = "<group>"; };
+		A0DAB077A345B8E38071C921 /* KeramikAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeramikAvatar.swift; sourceTree = "<group>"; };
 		A0F16C5628705326925EDDE0 /* CallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallView.swift; sourceTree = "<group>"; };
 		A46DD5058841EE2FB19872BB /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		AB333D12D3F4C506B3E49505 /* IBMPlexSans.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexSans.ttf; sourceTree = "<group>"; };
 		ABAEED7339E96003AE49BEC7 /* FocusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusViews.swift; sourceTree = "<group>"; };
 		AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BlueyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B13603392444280D432F5CD7 /* NotesSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesSync.swift; sourceTree = "<group>"; };
 		B44C98F6A89143BA9C926480 /* MacLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLink.swift; sourceTree = "<group>"; };
+		B823087412DE1BCABA8A1D3F /* OFL-DMSans.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-DMSans.txt"; sourceTree = "<group>"; };
 		B82D49B8F6D86AC716AAE9A7 /* Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace.swift; sourceTree = "<group>"; };
 		B9BA485BC5F8F12AD341A9D8 /* StatsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsTab.swift; sourceTree = "<group>"; };
 		BA033C0808E6AC5ABDF16475 /* WorkspaceRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceRootView.swift; sourceTree = "<group>"; };
 		BDF9983CC6F68611E8657F5E /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
+		C1CDABEF6D96D636BB56B08F /* DMSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Medium.ttf"; sourceTree = "<group>"; };
 		C446C2D5D000945D3BCE3FBA /* WorkspaceStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceStats.swift; sourceTree = "<group>"; };
 		C5C492440ABBC32B6A22D163 /* BlueyBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BlueyBroadcast.entitlements; sourceTree = "<group>"; };
 		C95CBBB828E99EC09708E98E /* GooglyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglyApp.swift; sourceTree = "<group>"; };
 		D0EEE8F996B2F95804C1ECF8 /* Fredoka.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Fredoka.ttf; sourceTree = "<group>"; };
+		D5B9950BF26CE913FAF4B35B /* HubRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubRootView.swift; sourceTree = "<group>"; };
 		D965803A61F4541BBDCE1FED /* BlueyWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyWidgets.swift; sourceTree = "<group>"; };
 		D9C8C709C172870488B27D41 /* BlueyBroadcast.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BlueyBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC7C65AB8589C0FC56D54226 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E884B5117C895A0439FDFE12 /* GooglyEyes.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GooglyEyes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED44E97C41C155D739BEFC4B /* BlueyCallActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyCallActivity.swift; sourceTree = "<group>"; };
-		F2DB1EDE9CAA36DAA410F211 /* BlueyAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyAudio.swift; sourceTree = "<group>"; };
+		F188A8DE741AC45E788BA4FE /* HubTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubTheme.swift; sourceTree = "<group>"; };
 		F3DBDAFA06EF8E2DBE92A488 /* WorkspaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChrome.swift; sourceTree = "<group>"; };
+		F7C2A75561EB16C7A231CFBB /* HubTodosNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubTodosNotes.swift; sourceTree = "<group>"; };
 		FFB5A3FC752388C5F4235248 /* FocusSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -146,10 +182,14 @@
 		2F574059BA9C302B222352AA /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
+				70DAEA7A2217022DF5D0BB22 /* DMSans-Bold.ttf */,
+				C1CDABEF6D96D636BB56B08F /* DMSans-Medium.ttf */,
+				3F158EC15BABAAD257FC577B /* DMSans-Regular.ttf */,
 				D0EEE8F996B2F95804C1ECF8 /* Fredoka.ttf */,
 				1C8AB3F441CA03CDA07FAE72 /* IBMPlexMono-Medium.ttf */,
 				0EAD8A3C72D3899AD5CD2AA8 /* IBMPlexMono-Regular.ttf */,
 				AB333D12D3F4C506B3E49505 /* IBMPlexSans.ttf */,
+				B823087412DE1BCABA8A1D3F /* OFL-DMSans.txt */,
 				020C853B32D37028CE040148 /* OFL-Fredoka.txt */,
 				1249C703A2D40793CA70D00E /* OFL-IBMPlex.txt */,
 			);
@@ -182,6 +222,8 @@
 				AA465BE9A3AF339DB5AC681A /* App */,
 				367D45300066EA25831FCDD6 /* Broadcast */,
 				4E4A2865153293B7FF109C8E /* Common */,
+				79064102162C418379FDBD8A /* keramik-3d */,
+				D55599E737C6FDE5455A5718 /* keramik-avatar */,
 				E8E2F33C9E110392983FDDDF /* Shared */,
 				8F41397BC1AEAB53CDE84BB3 /* Sources */,
 				5240C3EEF03B756DCF9ABD26 /* Widgets */,
@@ -209,25 +251,48 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		769614FE4CA5B708FC334311 /* Hub */ = {
+			isa = PBXGroup;
+			children = (
+				382567E0278FD16B65498AEA /* HubClient.swift */,
+				D5B9950BF26CE913FAF4B35B /* HubRootView.swift */,
+				F188A8DE741AC45E788BA4FE /* HubTheme.swift */,
+				07BA55D21847413604146489 /* HubThreads.swift */,
+				F7C2A75561EB16C7A231CFBB /* HubTodosNotes.swift */,
+			);
+			path = Hub;
+			sourceTree = "<group>";
+		};
+		79064102162C418379FDBD8A /* keramik-3d */ = {
+			isa = PBXGroup;
+			children = (
+				79D7C3C12936DB167CA356AC /* keramik-3d.js */,
+				693FD492D9A77112303F60A1 /* three.min.js */,
+			);
+			name = "keramik-3d";
+			path = "vendor/keramik-3d";
+			sourceTree = "<group>";
+		};
 		8F41397BC1AEAB53CDE84BB3 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
 				1510156B478E99D7C4446DCA /* BlueyAppView.swift */,
-				F2DB1EDE9CAA36DAA410F211 /* BlueyAudio.swift */,
 				778E6A815DD2C8595BD7653B /* CallSession.swift */,
 				A0F16C5628705326925EDDE0 /* CallView.swift */,
-				7ED2232FD362786D7A5D38B8 /* ChunkRecorder.swift */,
 				5028F9B110929B5CAC427465 /* FocusClient.swift */,
 				ABAEED7339E96003AE49BEC7 /* FocusViews.swift */,
 				C95CBBB828E99EC09708E98E /* GooglyApp.swift */,
-				2CD953582717D49F21FCD734 /* LiveVoice.swift */,
+				295C3ED9BA54A9A03DD5CF49 /* HermesClient.swift */,
+				95479E04AAF0E5C1FB0F7A4D /* HermesView.swift */,
 				B44C98F6A89143BA9C926480 /* MacLink.swift */,
+				B13603392444280D432F5CD7 /* NotesSync.swift */,
 				7A762C0174AFF849BAD1A700 /* PairingView.swift */,
 				8FFEC475DF92FF3548110652 /* PhoneWorkspace.swift */,
 				060DB7B07D0BE5AC3D1B9C5B /* PomodoroActivity.swift */,
 				8E88A21B39D4CF71F73A5737 /* QRPairingView.swift */,
 				83073BF3A1F734ADC97138DF /* SessionStore.swift */,
 				65620B4F67CBB8E8821EBAC8 /* SoundButton.swift */,
+				769614FE4CA5B708FC334311 /* Hub */,
 			);
 			name = Sources;
 			path = iOS/Sources;
@@ -252,12 +317,27 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		D55599E737C6FDE5455A5718 /* keramik-avatar */ = {
+			isa = PBXGroup;
+			children = (
+				1F05D570EC65415B1C06723D /* keramik-avatar.js */,
+			);
+			name = "keramik-avatar";
+			path = "vendor/keramik-avatar";
+			sourceTree = "<group>";
+		};
 		E8E2F33C9E110392983FDDDF /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				475EE52E8251FB9A91119BA4 /* BlueyAudio.swift */,
+				48FCEA6C5E452C1B0E9BBDC1 /* ChunkRecorder.swift */,
 				FFB5A3FC752388C5F4235248 /* FocusSession.swift */,
 				4F71F206238433A6F710528B /* GooglyLink.swift */,
+				51A2088B61E3A6DBFC2EEEEE /* HermesState.swift */,
+				A0DAB077A345B8E38071C921 /* KeramikAvatar.swift */,
+				5A3BEDFC39151D3055B604B2 /* LiveVoice.swift */,
 				4A31DC33ABF7869BDE4E0F6C /* Palette.swift */,
+				5AB8136F2C46D30D8774E3EC /* Pomodoro.swift */,
 				6C5BC31DC1FF4C0765EA0688 /* SecurePairing.swift */,
 				9523CAD3450502FE203C1BBD /* VoiceTurnBuffer.swift */,
 				B82D49B8F6D86AC716AAE9A7 /* Workspace.swift */,
@@ -374,12 +454,19 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4AEEC850D83F7A1245CB4706 /* DMSans-Bold.ttf in Resources */,
+				B7776B449323D43A0746B903 /* DMSans-Medium.ttf in Resources */,
+				032520AA18487BFA0D3F7C06 /* DMSans-Regular.ttf in Resources */,
 				6C5FF10BDE711139D00DB85A /* Fredoka.ttf in Resources */,
 				0F5614BE9A55A8498E40F5F1 /* IBMPlexMono-Medium.ttf in Resources */,
 				9C57F9AFA362287C2B93142E /* IBMPlexMono-Regular.ttf in Resources */,
 				FC47A19572BFD9F2386A85D3 /* IBMPlexSans.ttf in Resources */,
+				99BB01CF5598AF3396DEEAEA /* OFL-DMSans.txt in Resources */,
 				772A196648CCCC476A2E36F7 /* OFL-Fredoka.txt in Resources */,
 				0E02B38E4A5A909A93BA31C5 /* OFL-IBMPlex.txt in Resources */,
+				E6C82A0AF17C630C38D3817D /* keramik-3d.js in Resources */,
+				63254595DAF92EDD1EEF4391 /* keramik-avatar.js in Resources */,
+				E8AF573E8BBA9219C4F616F6 /* three.min.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -410,13 +497,13 @@
 			files = (
 				31C85F05EF22F9FFEFCBE8B5 /* BlobShape.swift in Sources */,
 				A3D88EE98BFEE3386A2C66DF /* BlueyAppView.swift in Sources */,
-				2664533ACA686D30BA241272 /* BlueyAudio.swift in Sources */,
+				67934D847C9B182DB08E8763 /* BlueyAudio.swift in Sources */,
 				B1C9F242A535AE4816E8E12B /* BlueyAvatar.swift in Sources */,
 				6C7000E336A3A00605D3291E /* BlueyCallActivity.swift in Sources */,
 				C4FF7A70DE85B02D233B97AB /* CallSession.swift in Sources */,
 				DFB94B8173E3A951C6E69A19 /* CallView.swift in Sources */,
 				13A96B95548DB6038ABE2137 /* ChatTab.swift in Sources */,
-				6F0FE87629E2A7A20676322C /* ChunkRecorder.swift in Sources */,
+				B044534E32B5458A52510C8A /* ChunkRecorder.swift in Sources */,
 				FE46C651E4616AC39842D74B /* FaceView.swift in Sources */,
 				F171BD7BAF58935750650B4D /* FocusClient.swift in Sources */,
 				C54C1E0F76ECB8F94A9AEE70 /* FocusSession.swift in Sources */,
@@ -424,12 +511,23 @@
 				18AC80FBFB3FBC953051B412 /* Glass.swift in Sources */,
 				CD8A48CB04D56A4BEF47D6AB /* GooglyApp.swift in Sources */,
 				6E03A7EBF9AAFFE4AC87ADE4 /* GooglyLink.swift in Sources */,
-				C2D2BC58460F12FB0D562BB7 /* LiveVoice.swift in Sources */,
+				9133702F3BE9075FBF70C007 /* HermesClient.swift in Sources */,
+				735A7DD1D622AC3DF06418CC /* HermesState.swift in Sources */,
+				FFA73A4E782A8F06313917B4 /* HermesView.swift in Sources */,
+				1A5A63320A44D0CA52E3A40A /* HubClient.swift in Sources */,
+				6DE7ED433C5215277E24CD40 /* HubRootView.swift in Sources */,
+				D4D2D129EC16C6C8504F58E6 /* HubTheme.swift in Sources */,
+				AEC263BAA6F682C7084CF42D /* HubThreads.swift in Sources */,
+				691C5772FA6D8BF7F4A4FA0C /* HubTodosNotes.swift in Sources */,
+				AF36CBC0F9F65043C0E3FBB5 /* KeramikAvatar.swift in Sources */,
+				E455D039FC051E69CF6A9D6F /* LiveVoice.swift in Sources */,
 				C763037B3F88C28F89EB61F0 /* MacLink.swift in Sources */,
+				415A152674D5DB1F53408376 /* NotesSync.swift in Sources */,
 				72699C9A4B4BCFC9D61E4D1C /* NotesTab.swift in Sources */,
 				68F797C6A1D3EC7A83674C2A /* PairingView.swift in Sources */,
 				6F0C91F5B7E911464464DB96 /* Palette.swift in Sources */,
 				CC3C2A41A35C8A24AB2718F1 /* PhoneWorkspace.swift in Sources */,
+				2BE71ADC1B38EB1C0C7C8BD1 /* Pomodoro.swift in Sources */,
 				D68CE23A8F715C77350BEF54 /* PomodoroActivity.swift in Sources */,
 				20118A4DD64F733973CAE75B /* PomodoroTab.swift in Sources */,
 				229BAA56B4ED395457C442E0 /* QRPairingView.swift in Sources */,

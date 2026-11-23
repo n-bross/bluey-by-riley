@@ -11,7 +11,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let codex = CodexController()
     private let focus = FocusCompanion()
     private let pairingPanel = PairingPanel()
+    private let avatarWindow = AvatarWindow()
+    private let quickNotes = QuickNotesWindow()
     private lazy var host = RealtimeHost(overlay: overlay, codex: codex)
+    private lazy var bridge = HermesBridge(server: server, host: host, focus: focus)
+    private lazy var notch = NotchController(host: host, focus: focus, hermes: bridge.hermes)
+    private var presence: Timer?
+    /// The talk shortcut is being held (talking on the Mac).
+    private var macTalkHeld = false
     private let workspace = WorkspaceStore()
     private lazy var web = WebServer(store: workspace)
     private lazy var workspaceWindow = WorkspaceWindow(store: workspace)
@@ -31,7 +38,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.server.send(face)
             self.web.send(face: face)
             self.workspaceWindow.animator.receive(face, at: Date().timeIntervalSinceReferenceDate)
+            self.avatarWindow.update(face)
+            if self.settings.notchMode { self.notch.face(face) }
         }
+        overlay.onLook = { [weak self] point in self?.avatarWindow.look(at: point) }
+        if settings.showAvatarWindow { avatarWindow.show() }
         overlay.start()
         showDemoBubbleIfAsked()
         checkPermissions()
@@ -53,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         focus.onChange = { [weak self] state in
             guard let data = try? JSONEncoder().encode(state), let text = String(data: data, encoding: .utf8) else { return }
             self?.server.broadcast(Packet(command: "focusState", text: text))
+            self?.notch.update(focus: state.current, sync: state)
             self?.web.sendFocus(state)
             self?.workspaceWindow.model.currentFocus = state.current
             self?.workspaceWindow.model.focusHistory = state.history
@@ -61,16 +73,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             self.host.focusNudge(message, target: target)
             self.server.broadcast(Packet(command: "focusChirp", text: message))
+            self.avatarWindow.react("stop")
+            if self.server.phoneNames.isEmpty, self.settings.notchMode { self.notch.voice.focusChirp() }
+        }
+        focus.onPomodoro = { [weak self] message in
+            // Off to a break / break's over: his bubble, a chirp on every device, and the notch drops open.
+            guard let self else { return }
+            self.host.focusNudge(message, target: nil)
+            self.server.broadcast(Packet(command: "focusChirp", text: message))
+            if self.settings.notchMode {
+                self.notch.announce(message)
+                if self.server.phoneNames.isEmpty { self.notch.voice.focusChirp() }
+            }
         }
         focus.startService()
+        bridge.start()
+        bridge.onHermesChange = { [weak self] in self?.notch.refreshHermes() }
+        bridge.deliverNote = { [weak self] note in self?.notch.deliver(note) ?? false }
+        notch.model.openSettings = { [weak self] in self?.openSettings() }
+        if ProcessInfo.processInfo.environment["GOOGLY_DEMO_SETTINGS"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.openSettings() }
+        }
+        applyNotchMode()
         startWorkspace()
         if CommandLine.arguments.contains("--pair") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.pairingPanel.show() }
         }
         server.onPhonesChanged = { [weak self] names in
             self?.refreshIcon()
-            if names.isEmpty { self?.focus.disconnected() }
-            if names.isEmpty, self?.host.awake == true { self?.host.setAwake(false) }
+            guard let self else { return }
+            // A newly connected phone learns where the hub is (so it also works away from the Mac).
+            if !names.isEmpty, let hub = HubSettings.phonePayload { self.server.broadcast(Packet(command: "hubConfig", text: hub)) }
+            // In notch mode the Mac itself keeps focus going; otherwise losing the phone pauses it.
+            if names.isEmpty, !self.settings.notchMode { self.focus.disconnected() }
+            if names.isEmpty, self.host.awake, !self.notch.isListening { self.host.setAwake(false) }
+            self.updateNotchPresence()
         }
         server.onRequest = { [weak self] packet, reply in
             guard let self else { return }
@@ -81,7 +118,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let args = packet.text.flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] } ?? [:]
                 var result = ""
                 switch packet.command {
-                case "focusStart": result = self.focus.start(task: args["task"] as? String ?? "", minutes: args["minutes"] as? Double ?? 30)
+                case "focusStart": result = self.focus.start(task: args["task"] as? String ?? "", minutes: args["minutes"] as? Double)
+                case "focusBreak": result = self.focus.takeBreak()
+                case "focusSkipBreak": result = self.focus.skipBreak()
+                case "focusPomodoro":
+                    if let json = args["pomodoro"] as? String, let s = try? JSONDecoder().decode(PomodoroRhythm.self, from: Data(json.utf8)) {
+                        result = self.focus.setPomodoro(s)
+                    } else { result = "Couldn't read those Pomodoro settings." }
                 case "focusPause": result = self.focus.pause()
                 case "focusResume": result = self.focus.resume()
                 case "focusEnd": result = self.focus.end()
@@ -93,23 +136,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 default: break
                 }
                 reply(Packet(command: "focusReply", callID: packet.callID, text: result))
-            } else { self.host.handle(packet, reply: reply) }
+            } else if !self.bridge.handle(packet, reply: reply) { self.host.handle(packet, reply: reply) }
         }
         server.start()
         host.onChange = { [weak self] in self?.refreshIcon() }
         codex.onEvent = { [weak self] event in self?.codexEvent(event) }
         codex.warmUp()
 
-        // ⌥Space wakes him up or puts him back to sleep (same as double tapping him on the phone).
-        HotKeys.shared.register(keyCode: kVK_Space, modifiers: optionKey) { [weak self] in self?.toggleAwake() }
-        // ⌃⌥P point here, ⌃⌥F follow mouse, ⌃⌥D stop pointing, ⌃⌥H hide, ⌃⌥T talk test.
-        HotKeys.shared.register(keyCode: kVK_ANSI_P) { [weak self] in self?.pointHere() }
-        HotKeys.shared.register(keyCode: kVK_ANSI_F) { [weak self] in self?.toggleFollow() }
-        HotKeys.shared.register(keyCode: kVK_ANSI_D) { [weak self] in self?.overlay.goHome() }
-        HotKeys.shared.register(keyCode: kVK_ANSI_H) { [weak self] in self?.toggleShow() }
-        HotKeys.shared.register(keyCode: kVK_ANSI_T) { [weak self] in self?.overlay.talkTest() }
-        // ⌃⌥S stops him using the computer right away.
-        HotKeys.shared.register(keyCode: kVK_ANSI_S) { [weak self] in self?.stopActions() }
+        registerShortcuts()
+        if settings.hidden { applyHidden() }
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.updateNotchPresence() }
+        }
 
         if Keychain.get(.openai) == nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.editKeys() }
@@ -150,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func runFocusCommand(_ command: String, _ args: [String: Any]) -> String {
         switch command {
-        case "focusStart": return focus.start(task: args["task"] as? String ?? "", minutes: args["minutes"] as? Double ?? 30)
+        case "focusStart": return focus.start(task: args["task"] as? String ?? "", minutes: args["minutes"] as? Double)
         case "focusPause": return focus.pause()
         case "focusResume": return focus.resume()
         case "focusEnd": return focus.end()
@@ -195,6 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        notch.stop()
         workspace.save()
         focus.shutdown()
         codex.shutdown()
@@ -209,6 +249,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .approval(let note, let line): return (note, line, true)
             }
         }()
+        if notch.deliver(note) { return }
         if host.awake, !server.phoneNames.isEmpty {
             server.broadcast(Packet(command: "codexNote", text: note))
             return
@@ -239,8 +280,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openCodex() { NSWorkspace.shared.open(URL(string: "codex://")!) }
 
+    // MARK: Shortcuts and hiding
+
+    /// (Re-)registers every global shortcut from Settings ▸ Shortcuts. Returns the ones macOS refused.
+    @discardableResult
+    func registerShortcuts() -> [ShortcutAction] {
+        HotKeys.shared.unregisterAll()
+        var refused: [ShortcutAction] = []
+        for action in ShortcutAction.allCases {
+            guard let shortcut = ShortcutStore.get(action) else { continue }
+            let ok: Bool
+            switch action {
+            case .talk:
+                // Hold to talk on the Mac; with a phone connected it wakes the phone (like double tapping it).
+                ok = HotKeys.shared.register(keyCode: shortcut.keyCode, modifiers: shortcut.modifiers, onRelease: { [weak self] in
+                    guard let self, self.macTalkHeld else { return }
+                    self.macTalkHeld = false
+                    self.notch.endTalk()
+                }) { [weak self] in
+                    guard let self else { return }
+                    if self.server.phoneNames.isEmpty, self.settings.notchMode {
+                        if self.settings.hidden { self.toggleHidden() }
+                        self.macTalkHeld = true
+                        self.notch.beginTalk()
+                    } else { self.toggleAwake() }
+                }
+            default:
+                ok = HotKeys.shared.register(keyCode: shortcut.keyCode, modifiers: shortcut.modifiers) { [weak self] in
+                    self?.perform(action)
+                }
+            }
+            if !ok { refused.append(action) }
+        }
+        return refused
+    }
+
+    private func perform(_ action: ShortcutAction) {
+        switch action {
+        case .talk: break
+        case .typeToBluey: typeToBluey()
+        case .hide: toggleHidden()
+        case .wake: toggleAwake()
+        case .stop: stopActions()
+        case .pointHere: pointHere()
+        case .followMouse: toggleFollow()
+        case .stopPointing: overlay.goHome()
+        case .notes: quickNotes.toggle()
+        }
+    }
+
+    /// Makes him disappear everywhere (notch, pointer, avatar window) or come back.
+    @objc func toggleHidden() {
+        settings.hidden.toggle()
+        applyHidden()
+    }
+
+    private func applyHidden() {
+        let hidden = settings.hidden
+        overlay.setHidden(hidden)
+        notch.setHidden(hidden)
+        if hidden {
+            avatarWindow.hide()
+            if notch.isListening { notch.voice.sleep() }
+        } else if settings.showAvatarWindow {
+            avatarWindow.show()
+        }
+        statusItem.button?.alphaValue = hidden ? 0.45 : 1
+    }
+
     private func refreshIcon() {
-        statusItem.button?.appearsDisabled = server.phoneNames.isEmpty
+        statusItem.button?.appearsDisabled = server.phoneNames.isEmpty && !settings.notchMode
     }
 
     // MARK: Actions
@@ -256,7 +365,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         overlay.goHome()
     }
 
-    @objc private func dock() { overlay.goHome() }
 
     /// For checking the speech bubble's look: GOOGLY_DEMO_BUBBLE=top|middle|home shows a sample reply.
     private func showDemoBubbleIfAsked() {
@@ -295,21 +403,136 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
     }
-    @objc private func toggleShow() { settings.showCursor.toggle() }
+    @objc private func testAvatarMood(_ item: NSMenuItem) {
+        if let id = item.representedObject as? String { avatarWindow.test(mood: id) }
+    }
+    @objc private func testAvatarReaction(_ item: NSMenuItem) {
+        if let id = item.representedObject as? String { avatarWindow.react(id) }
+    }
     @objc private func pairPhone() { pairingPanel.show() }
     @objc private func pauseFocus() { focus.pause() }
     @objc private func resumeFocus() { _ = focus.resume() }
     @objc private func endFocus() { _ = focus.end() }
-    @objc private func toggleFocusDeveloperMode() { focus.setDeveloperMode(!focus.developerMode) }
-    @objc private func setTrail(_ item: NSMenuItem) {
-        if let raw = item.representedObject as? String, let trail = PointerTrail(rawValue: raw) { settings.trail = trail }
-    }
-    @objc private func talkTest() { overlay.talkTest() }
 
-    @objc private func setSize(_ item: NSMenuItem) { settings.cursorSize = Double(item.tag) }
-    @objc private func setPhonePosition(_ item: NSMenuItem) { settings.phonePosition = Double(item.tag) / 100 }
     @objc private func toggleAwake() {
+        if server.phoneNames.isEmpty, settings.notchMode {
+            if notch.isListening { notch.voice.sleep() } else { notch.voice.wake() }
+            return
+        }
         server.broadcast(Packet(command: host.awake ? "sleep" : "wake"))
+    }
+
+    private func pomodoroMenu() -> NSMenuItem {
+        let menu = NSMenu()
+        let p = focus.pomodoro
+        let summary = NSMenuItem(title: p.summary, action: nil, keyEquivalent: "")
+        summary.isEnabled = false
+        menu.addItem(summary)
+        if p.enabled {
+            let rounds = NSMenuItem(title: "Rounds done this cycle: \(focus.completedRounds) of \(p.roundsBeforeLongBreak)", action: nil, keyEquivalent: "")
+            rounds.isEnabled = false
+            menu.addItem(rounds)
+        }
+        menu.addItem(.separator())
+        let on = item("Pomodoro Breaks", #selector(togglePomodoro))
+        on.state = p.enabled ? .on : .off
+        menu.addItem(on)
+        for (index, preset) in PomodoroRhythm.presets.enumerated() {
+            let m = item(preset.name, #selector(setPomodoroPreset(_:)))
+            m.tag = index
+            m.state = p.enabled && p.sameRhythm(preset.settings) ? .on : .off
+            menu.addItem(m)
+        }
+        menu.addItem(item("Custom Times…", #selector(customPomodoro)))
+        menu.addItem(.separator())
+        let breaks = item("Start Breaks Automatically", #selector(toggleAutoBreaks))
+        breaks.state = p.autoStartBreaks ? .on : .off
+        menu.addItem(breaks)
+        let next = item("Start Next Round Automatically", #selector(toggleAutoNext))
+        next.state = p.autoStartFocus ? .on : .off
+        menu.addItem(next)
+        if focus.rest == nil, p.enabled { menu.addItem(item("Take a Break Now", #selector(takeBreak))) }
+        let root = NSMenuItem(title: "Pomodoro", action: nil, keyEquivalent: "")
+        root.submenu = menu
+        return root
+    }
+
+    @objc private func togglePomodoro() { var p = focus.pomodoro; p.enabled.toggle(); focus.setPomodoro(p) }
+    @objc private func toggleAutoBreaks() { var p = focus.pomodoro; p.autoStartBreaks.toggle(); focus.setPomodoro(p) }
+    @objc private func toggleAutoNext() { var p = focus.pomodoro; p.autoStartFocus.toggle(); focus.setPomodoro(p) }
+    @objc private func takeBreak() { host.showReply(focus.takeBreak()) }
+    @objc private func skipBreak() { host.showReply(focus.skipBreak()) }
+    @objc private func setPomodoroPreset(_ item: NSMenuItem) {
+        guard PomodoroRhythm.presets.indices.contains(item.tag) else { return }
+        var p = PomodoroRhythm.presets[item.tag].settings
+        p.autoStartBreaks = focus.pomodoro.autoStartBreaks
+        p.autoStartFocus = focus.pomodoro.autoStartFocus
+        focus.setPomodoro(p)
+    }
+
+    @objc private func customPomodoro() {
+        NSApp.activate(ignoringOtherApps: true)
+        let p = focus.pomodoro
+        let alert = NSAlert()
+        alert.messageText = "Pomodoro Timer"
+        alert.informativeText = "Minutes for focus, short break and long break, and how many rounds come before the long break."
+        let labels = ["Focus (min)", "Break (min)", "Long break (min)", "Rounds before long break"]
+        let values = [p.focusMinutes, p.shortBreakMinutes, p.longBreakMinutes, Double(p.roundsBeforeLongBreak)]
+        let box = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 120))
+        var fields: [NSTextField] = []
+        for (i, label) in labels.enumerated() {
+            let y = CGFloat(90 - i * 30)
+            let l = NSTextField(labelWithString: label)
+            l.frame = NSRect(x: 0, y: y + 2, width: 200, height: 20)
+            let f = NSTextField(string: String(Int(values[i])))
+            f.frame = NSRect(x: 210, y: y, width: 80, height: 24)
+            box.addSubview(l); box.addSubview(f); fields.append(f)
+        }
+        alert.accessoryView = box
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        var s = p
+        s.enabled = true
+        s.focusMinutes = Double(fields[0].stringValue) ?? p.focusMinutes
+        s.shortBreakMinutes = Double(fields[1].stringValue) ?? p.shortBreakMinutes
+        s.longBreakMinutes = Double(fields[2].stringValue) ?? p.longBreakMinutes
+        s.roundsBeforeLongBreak = Int(fields[3].stringValue) ?? p.roundsBeforeLongBreak
+        host.showReply(focus.setPomodoro(s))
+    }
+
+    /// The notch bar is for laptop-only moments: it steps aside while the phone is connected or an
+    /// external monitor is in use (he's visible there instead).
+    private func updateNotchPresence() {
+        let present = settings.notchMode && server.phoneNames.isEmpty && !NotchController.externalDisplayConnected
+        notch.setSuppressed(!present)
+        overlay.setHome(atTop: present)
+    }
+
+    @objc private func typeToBluey() {
+        guard settings.notchMode else { return }
+        if settings.hidden { toggleHidden() }
+        notch.openForTyping()
+    }
+
+    /// Notch mode: he sits in the notch, listens on the Mac, and the Mac keeps focus sessions alive itself.
+    private func applyNotchMode() {
+        presence?.invalidate(); presence = nil
+        if settings.notchMode {
+            notch.start()
+            focus.sync()
+            let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.focus.heartbeat() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            presence = timer
+            focus.heartbeat()
+        } else {
+            notch.stop()
+            if server.phoneNames.isEmpty { focus.disconnected() }
+        }
+        updateNotchPresence()
+        refreshIcon()
     }
 
     /// On launch, asks for whatever he still needs (so Bluey shows up in those Settings lists),
@@ -334,12 +557,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func stopActions() {
         focus.pause("Stopped with ⌃⌥S")
         host.stopActions()
-    }
-
-    @objc private func toggleComputerControl() {
-        settings.computerControl.toggle()
-        // Focus only needs Screen Recording. Accessibility is optional for explicit computer control.
-        restartIfAwake()  // his tools change with this switch
     }
 
     @objc private func allowComputerControl() {
@@ -398,20 +615,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !key.isEmpty { Keychain.set(.openai, key) }
     }
 
-    @objc private func setMood(_ item: NSMenuItem) {
-        if let mood = item.representedObject as? String, let m = Mood(rawValue: mood) { settings.mood = m }
-    }
-
     // MARK: Menu
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
+        // Where he is.
         let phones = server.phoneNames
-        let status = NSMenuItem(title: phones.isEmpty ? "Waiting for the phone app…" : "Phone connected: \(phones.joined(separator: ", "))",
-                                action: nil, keyEquivalent: "")
+        let where_ = phones.isEmpty ? (settings.notchMode ? "Bluey is in the notch" : "Waiting for the phone app…")
+                                    : "Phone connected: \(phones.joined(separator: ", "))"
+        let status = NSMenuItem(title: settings.hidden ? "Bluey is hidden" : where_, action: nil, keyEquivalent: "")
         status.isEnabled = false
         menu.addItem(status)
+        menu.addItem(.separator())
         let open = NSMenuItem(title: "Bluey öffnen…", action: #selector(openWorkspace), keyEquivalent: "o")
         open.keyEquivalentModifierMask = [.control, .option]
         open.target = self
@@ -420,69 +636,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         webItem.target = self
         menu.addItem(webItem)
         menu.addItem(.separator())
-        menu.addItem(item("Pair iPhone (QR)…", #selector(pairPhone)))
+
+        // Focus and Pomodoro.
         if let session = focus.current, session.status != .ended {
             let title = NSMenuItem(title: "Focus: \(session.task) · \(FocusSession.clock(session.remaining))", action: nil, keyEquivalent: "")
             title.isEnabled = false; menu.addItem(title)
             menu.addItem(item(session.status == .running ? "Pause Focus" : "Resume Focus", session.status == .running ? #selector(pauseFocus) : #selector(resumeFocus)))
             menu.addItem(item("End Focus", #selector(endFocus)))
         }
-        let developer = item("Developer Mode (4× · checks every 10s)", #selector(toggleFocusDeveloperMode))
-        developer.state = focus.developerMode ? .on : .off
-        menu.addItem(developer)
-        let wake = NSMenuItem(title: host.awake ? "Go to Sleep (Follow Mode)" : "Wake Up and Talk",
-                              action: #selector(toggleAwake), keyEquivalent: " ")
-        wake.keyEquivalentModifierMask = [.option]
-        wake.target = self
-        wake.isEnabled = !phones.isEmpty
+        if let rest = focus.rest {
+            let r = NSMenuItem(title: "\(rest.title): \(FocusSession.clock(rest.remaining)) left", action: nil, keyEquivalent: "")
+            r.isEnabled = false; menu.addItem(r)
+            menu.addItem(item("Skip Break", #selector(skipBreak)))
+        }
+        menu.addItem(pomodoroMenu())
+        menu.addItem(.separator())
+
+        // Talking to him.
+        if settings.notchMode { menu.addItem(shortcutItem("Type to Bluey…", #selector(typeToBluey), .typeToBluey)) }
+        let listening = phones.isEmpty ? notch.isListening : host.awake
+        let wake = shortcutItem(listening ? "Stop Listening" : "Start Listening", #selector(toggleAwake), .wake)
+        wake.isEnabled = !phones.isEmpty || settings.notchMode
         menu.addItem(wake)
-        menu.addItem(.separator())
-
-        let control = item("Let Him Use the Computer", #selector(toggleComputerControl))
-        control.state = settings.computerControl ? .on : .off
-        menu.addItem(control)
-        if settings.computerControl && !ComputerControl.isTrusted {
-            menu.addItem(item("Allow Clicking and Typing (Accessibility)…", #selector(allowComputerControl)))
-        }
-        menu.addItem(item("Stop Him", #selector(stopActions), key: "s"))
-        menu.addItem(.separator())
-
-        let point = item("Point Here", #selector(pointHere), key: "p")
-        menu.addItem(point)
-        let follow = item("Eyes Follow My Mouse", #selector(toggleFollow), key: "f")
-        follow.state = settings.followMouse ? .on : .off
-        menu.addItem(follow)
-        menu.addItem(item("Stop Pointing", #selector(dock), key: "d"))
-        menu.addItem(item("Talk Test", #selector(talkTest), key: "t"))
-        menu.addItem(.separator())
-
-        let moodMenu = NSMenu()
-        for mood in Mood.allCases where mood != .talking && mood != .pointing && mood != .sleepy {
-            let m = item(mood.title, #selector(setMood(_:)))
-            m.representedObject = mood.rawValue
-            m.state = settings.mood == mood ? .on : .off
-            moodMenu.addItem(m)
-        }
-        menu.addItem(submenu("Mood", moodMenu))
-
-        let sizeMenu = NSMenu()
-        for (name, size) in [("Small", 48), ("Medium", 72), ("Large", 96), ("Huge", 120)] {
-            let s = item("\(name) (\(size) pt)", #selector(setSize(_:)))
-            s.tag = size
-            s.state = Int(settings.cursorSize) == size ? .on : .off
-            sizeMenu.addItem(s)
-        }
-        menu.addItem(submenu("Cursor Size", sizeMenu))
-
-        let phoneMenu = NSMenu()
-        for (name, pos) in [("Left", 20), ("Center", 50), ("Right", 80)] {
-            let p = item(name, #selector(setPhonePosition(_:)))
-            p.tag = pos
-            p.state = Int((settings.phonePosition * 100).rounded()) == pos ? .on : .off
-            phoneMenu.addItem(p)
-        }
-        menu.addItem(submenu("Phone Sits Under", phoneMenu))
-
+        menu.addItem(bridge.menuItem(target: self))
         if CodexController.isInstalled {
             let codexMenu = NSMenu()
             for job in codex.jobs.suffix(8).reversed() {
@@ -495,27 +671,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             codexMenu.addItem(item("Open Codex", #selector(openCodex)))
             menu.addItem(submenu(codex.approvals.isEmpty ? "Codex" : "Codex (waiting for you)", codexMenu))
         }
+        menu.addItem(shortcutItem("Quick Notes", #selector(toggleQuickNotes), .notes))
         menu.addItem(item("Open Meeting Notes", #selector(openNotes)))
-        menu.addItem(item("Personality…", #selector(editPersonality)))
-        menu.addItem(item("OpenAI Key…", #selector(editKeys)))
         menu.addItem(.separator())
 
-        let trailMenu = NSMenu()
-        for trail in PointerTrail.allCases {
-            let t = item(trail.title, #selector(setTrail(_:)))
-            t.representedObject = trail.rawValue
-            t.state = settings.trail == trail ? .on : .off
-            trailMenu.addItem(t)
+        // Control.
+        menu.addItem(shortcutItem(settings.hidden ? "Show Bluey" : "Hide Bluey", #selector(toggleHidden), .hide))
+        menu.addItem(shortcutItem("Stop Him", #selector(stopActions), .stop))
+        let testMenu = NSMenu()
+        for mood in KeramikTest.moods {
+            let m = NSMenuItem(title: mood.title, action: #selector(testAvatarMood(_:)), keyEquivalent: "")
+            m.target = self; m.representedObject = mood.id; testMenu.addItem(m)
         }
-        menu.addItem(submenu("Pointer Trail", trailMenu))
-
-        let show = item("Show Cursor", #selector(toggleShow), key: "h")
-        show.state = settings.showCursor ? .on : .off
-        menu.addItem(show)
-
+        testMenu.addItem(.separator())
+        for reaction in KeramikTest.reactions + [("", "")] + KeramikTest.activities + [("", "")] + KeramikTest.power {
+            if reaction.id.isEmpty { testMenu.addItem(.separator()); continue }
+            let r = NSMenuItem(title: reaction.title, action: #selector(testAvatarReaction(_:)), keyEquivalent: "")
+            r.target = self; r.representedObject = reaction.id; testMenu.addItem(r)
+        }
+        menu.addItem(submenu("Test Avatar", testMenu))
         menu.addItem(.separator())
+        let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        prefs.target = self
+        menu.addItem(prefs)
         menu.addItem(NSMenuItem(title: "Quit Bluey", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
+
+    /// A menu item that shows the action's current global shortcut.
+    private func shortcutItem(_ title: String, _ action: Selector, _ shortcut: ShortcutAction) -> NSMenuItem {
+        let key = ShortcutStore.get(shortcut)?.menuKey
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: key?.key ?? "")
+        item.keyEquivalentModifierMask = key?.modifiers ?? []
+        item.target = self
+        return item
+    }
+
+    private lazy var settingsModel: SettingsModel = {
+        let model = SettingsModel(focus: focus, hermes: bridge.hermes)
+        model.journal = bridge.journal
+        model.sendHubToPhone = { [weak self] in
+            guard let self, let hub = HubSettings.phonePayload else { return "Add the hub address first." }
+            guard !self.server.phoneNames.isEmpty else { return "No phone connected right now; it gets the address next time it connects." }
+            self.server.broadcast(Packet(command: "hubConfig", text: hub))
+            return "Sent to \(self.server.phoneNames.joined(separator: ", "))."
+        }
+        model.applyNotchMode = { [weak self] in self?.applyNotchMode() }
+        model.setAvatarWindow = { [weak self] on in
+            guard let self else { return }
+            if on, !self.settings.hidden { self.avatarWindow.show() } else { self.avatarWindow.hide() }
+        }
+        model.registerShortcuts = { [weak self] in self?.registerShortcuts() ?? [] }
+        model.pairPhone = { [weak self] in self?.pairPhone() }
+        model.editPersonality = { [weak self] in self?.editPersonality() }
+        model.allowComputerControl = { [weak self] in self?.allowComputerControl() }
+        model.computerControlChanged = { [weak self] in self?.restartIfAwake() }  // his tools change with it
+        model.activityRunning = { [weak self] in self?.bridge.activityRunning ?? false }
+        model.startActivityWatch = {
+            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/Applications/ActivityWatch.app"), configuration: NSWorkspace.OpenConfiguration())
+        }
+        return model
+    }()
+    private lazy var settingsWindow = SettingsWindowController(model: settingsModel)
+
+    @objc func openSettings() { settingsWindow.show() }
+    @objc private func toggleQuickNotes() { quickNotes.toggle() }
 
     /// Menu item that shows its global shortcut (⌃⌥ + key) when given one.
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {

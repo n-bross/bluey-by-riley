@@ -9,6 +9,20 @@ final class FocusCompanion {
     private(set) var history: [FocusSession] = []
     var onChange: ((FocusSync) -> Void)?
     var onNudge: ((String, Target?) -> Void)?
+    /// Called every tick while focus runs, and once whenever it pauses or ends (for ActivityWatch).
+    var onActivity: ((FocusSession) -> Void)?
+    /// Pomodoro moments he should announce: off to a break, break's over.
+    var onPomodoro: ((String) -> Void)?
+
+    // MARK: Pomodoro state
+    private(set) var pomodoro = PomodoroRhythm()
+    /// The break in progress, if any. Breaks need no phone and no screen checks.
+    private(set) var rest: PomodoroBreak?
+    /// Focus rounds finished (by the timer) in the current cycle; a long break resets it.
+    private(set) var completedRounds = 0
+    /// The last focus task, so "next round" can pick it up again.
+    private(set) var lastTask: String?
+    private var lastBreakTick: Double?
     var connected = false
     private(set) var developerMode: Bool
     private let settings: UserDefaults?
@@ -53,6 +67,9 @@ final class FocusCompanion {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         file = historyFile ?? dir.appendingPathComponent("focus-history.json")
         history = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode([FocusSession].self, from: $0) } ?? []
+        if let data = settings?.data(forKey: "pomodoro"), let saved = try? JSONDecoder().decode(PomodoroRhythm.self, from: data) {
+            pomodoro = saved.clamped()
+        }
     }
     func startService() {
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
@@ -90,12 +107,16 @@ final class FocusCompanion {
         policy = FocusNudgePolicy(maximumGap: (current?.observationDuration ?? (enabled ? 40 : 30)) * 1.5,
                                   developerMode: enabled)
         lastTick = now(); lastCheck = current?.elapsed ?? 0
-        if current?.status == .ended { finish() } else { publish(); persist() }
+        if current?.status == .ended { finish(timeUp: true) } else { publish(); persist() }
         return enabled ? "Developer Mode on: clock 4×, checks every 10 seconds." : "Developer Mode off: normal clock, checks every 30 seconds."
     }
 
-    @discardableResult func start(task: String, minutes: Double = 30) -> String {
+    /// The default focus length: the Pomodoro round when Pomodoro is on, otherwise 30 minutes.
+    var defaultMinutes: Double { pomodoro.enabled ? pomodoro.focusMinutes : 30 }
+
+    @discardableResult func start(task: String, minutes requested: Double? = nil) -> String {
         let task = task.trimmingCharacters(in: .whitespacesAndNewlines)
+        let minutes = requested ?? defaultMinutes
         guard !task.isEmpty else { return "Tell me the task first." }
         guard minutes.isFinite else { return "Use a duration between 1 and 240 minutes." }
         guard !hasSession else { return "There's already a focus session. End it before starting another." }
@@ -103,15 +124,21 @@ final class FocusCompanion {
         guard permission() else { return "Screen Recording is off. Enable Bluey in System Settings > Privacy & Security > Screen Recording, then reopen Bluey." }
         guard hasKey() else { return "Add your OpenAI key in Bluey's Mac menu." }
         cancel()
+        let skipped = rest != nil
+        rest = nil; lastBreakTick = nil; lastTask = task
         current = FocusSession(task: task, duration: min(240, max(1, minutes)) * 60, developerMode: developerMode)
         policy = FocusNudgePolicy(maximumGap: current!.observationDuration * 1.5, developerMode: developerMode)
         lastTick = now(); lastCheck = 0
         publish(); persist()
-        return "Focus started: \(task), \(Int(min(240, max(1, minutes)))) minutes."
+        let round = pomodoro.enabled ? " Round \(completedRounds + 1) of \(pomodoro.roundsBeforeLongBreak)." : ""
+        return (skipped ? "Break skipped. " : "") + "Focus started: \(task), \(Int(min(240, max(1, minutes)))) minutes.\(round)"
     }
     @discardableResult func pause(_ reason: String = "Paused") -> String {
+        // Breaks never pause (lock, sleep, the phone going to the background): being away is the point.
+        if current?.status != .running, rest != nil { return "The break keeps running. Say skip to end it early." }
         guard current?.status == .running else { return "Focus is already paused or ended." }
         advanceClock(); current?.pause(reason); cancel(); policy.reset(); publish(); persist()
+        if let current { onActivity?(current) }
         return "Focus paused."
     }
     @discardableResult func resume() -> String {
@@ -124,7 +151,8 @@ final class FocusCompanion {
     }
     @discardableResult func end() -> String {
         guard hasSession else { return "There's no running focus session." }
-        advanceClock(); current?.end(); finish(); return "Focus finished. Your timeline is on the phone."
+        if !hasSession, rest != nil { return skipBreak() }
+        advanceClock(); current?.end(); finish(timeUp: false); return "Focus finished. Your timeline is on the phone."
     }
     @discardableResult func testNudge() -> String {
         guard developerMode, freshConnection else { return "Enable Developer Mode and connect the phone first." }
@@ -142,14 +170,16 @@ final class FocusCompanion {
         if delta <= 3 { current?.advance(delta) }
     }
     func tick() {
+        tickBreak()
         guard monitoring else { return }
         guard freshConnection else { pause("Phone disconnected. Reconnect, then resume."); return }
         guard unlocked else { pause("Mac locked. Resume when ready."); return }
         guard permission() else { pause("Screen Recording permission lost. Enable it, then reopen Bluey."); return }
         if now() - lastTick > 3 { pause("Mac was inactive. Resume when ready."); return }
         advanceClock()
-        if current?.status == .ended { finish(); return }
+        if current?.status == .ended { finish(timeUp: true); return }
         publish()
+        if let current { onActivity?(current) }
         if let session = current, session.elapsed - lastCheck >= session.observationDuration, work == nil {
             lastCheck = session.elapsed
             check(session: session)
@@ -220,12 +250,111 @@ final class FocusCompanion {
             }
         }
     }
-    private func finish() {
+    /// `timeUp`: the timer ran out (a finished Pomodoro round), rather than you ending it early.
+    private func finish(timeUp: Bool) {
         cancel(); policy.reset()
         if let current {
             history.removeAll { $0.id == current.id }; history.insert(current, at: 0)
             history = Array(history.prefix(30))
         }
+        if timeUp, pomodoro.enabled, let session = current {
+            completedRounds += 1
+            let kind = pomodoro.breakKind(afterRound: completedRounds)
+            let minutes = Int(pomodoro.breakMinutes(kind))
+            if pomodoro.autoStartBreaks {
+                startBreak(kind: kind, task: session.task)
+                onPomodoro?(kind == .long
+                    ? "Round \(completedRounds) done, that's the set! Proper \(minutes)-minute break now: get up, move about, no screens."
+                    : "Time's up, round \(completedRounds) done. Off you pop for \(minutes) minutes: stand up, stretch, have some water.")
+            } else {
+                onPomodoro?("Round \(completedRounds) done. Fancy a \(minutes)-minute break? Say \"break\" or tap Break.")
+            }
+        }
+        publish(); persist()
+        if let current { onActivity?(current) }
+    }
+
+    // MARK: Pomodoro
+
+    private func startBreak(kind: PomodoroBreak.Kind, task: String) {
+        rest = PomodoroBreak(kind: kind, minutes: pomodoro.breakMinutes(kind), round: completedRounds, task: task,
+                             clockRate: developerMode ? 4 : 1)
+        lastBreakTick = now()
+    }
+
+    /// Starts a break now (after a round, or whenever you ask). Ends a running focus session first.
+    @discardableResult func takeBreak() -> String {
+        if rest != nil { return "You're already on a break." }
+        var task = lastTask ?? current?.task ?? ""
+        if hasSession {
+            task = current?.task ?? task
+            advanceClock(); current?.end(); finish(timeUp: false)
+        }
+        let kind = pomodoro.breakKind(afterRound: max(completedRounds, 1))
+        startBreak(kind: kind, task: task)
+        publish()
+        return "\(rest?.title ?? "Break") started: \(Int(pomodoro.breakMinutes(kind))) minutes. No screen checks until it's over."
+    }
+
+    @discardableResult func skipBreak() -> String {
+        guard let r = rest else { return "There's no break to skip." }
+        rest = nil; lastBreakTick = nil
+        if r.kind == .long { completedRounds = 0 }
+        publish()
+        if pomodoro.autoStartFocus, !r.task.isEmpty { return "Break skipped. " + start(task: r.task) }
+        return "Break skipped. Ready when you are."
+    }
+
+    private func tickBreak() {
+        guard var r = rest else { return }
+        let t = now()
+        let delta = t - (lastBreakTick ?? t)
+        lastBreakTick = t
+        // Long gaps (sleep) still count: you were away, which is the point of a break.
+        let finished = r.advance(min(max(delta, 0), 3600))
+        rest = r
+        guard finished else {
+            if Int(t) != Int(t - delta) { publish() }  // about once a second for the countdowns
+            return
+        }
+        rest = nil; lastBreakTick = nil
+        if r.kind == .long { completedRounds = 0 }
+        let next = completedRounds + 1
+        let task = r.task.isEmpty ? nil : r.task
+        if pomodoro.autoStartFocus, let task {
+            let result = start(task: task)
+            onPomodoro?(result.hasPrefix("Focus started")
+                ? "Break's over! Round \(next) on \"\(task.prefix(60))\" starts now."
+                : "Break's over! I couldn't start round \(next): \(result)")
+        } else {
+            onPomodoro?(task.map { "Break's over! Ready for round \(next) on \"\($0.prefix(60))\"? Say \"go\" or tap Focus." }
+                        ?? "Break's over! Ready for the next round?")
+        }
+        publish()
+    }
+
+    /// Changes the rhythm. Takes effect from the next round or break.
+    @discardableResult func setPomodoro(_ settings: PomodoroRhythm) -> String {
+        let clean = settings.clamped()
+        pomodoro = clean
+        if let data = try? JSONEncoder().encode(clean) { self.settings?.set(data, forKey: "pomodoro") }
+        if completedRounds >= clean.roundsBeforeLongBreak { completedRounds = 0 }
+        publish()
+        return clean.enabled ? "Pomodoro set: \(clean.summary)." : "Pomodoro off: focus sessions just end, no breaks."
+    }
+
+    /// One line for his status tool and Hermes.
+    var pomodoroStatus: String {
+        var parts = [pomodoro.summary + "."]
+        if pomodoro.enabled { parts.append("Rounds done this cycle: \(completedRounds) of \(pomodoro.roundsBeforeLongBreak).") }
+        if let r = rest { parts.append("\(r.title)\(r.paused ? " (paused)" : ""): \(FocusSession.clock(r.remaining)) left.") }
+        return parts.joined(separator: " ")
+    }
+
+    /// Stores ActivityWatch's summary on the session it belongs to (current or a finished one).
+    func attachActivity(_ summary: ActivitySummary, to id: UUID) {
+        if current?.id == id { current?.activity = summary }
+        if let i = history.firstIndex(where: { $0.id == id }) { history[i].activity = summary }
         publish(); persist()
     }
     private func persist() {
@@ -241,8 +370,9 @@ final class FocusCompanion {
     }
     private func publish() {
         revision += 1
-        if showsCountdown { countdown.update(current) }
-        onChange?(FocusSync(current: current, history: history, revision: revision, developerMode: developerMode))
+        if showsCountdown { countdown.update(current, rest: rest) }
+        onChange?(FocusSync(current: current, history: history, revision: revision, developerMode: developerMode,
+                            pomodoro: pomodoro, rest: rest, completedRounds: completedRounds))
     }
 }
 
@@ -251,8 +381,9 @@ private final class FocusCountdown {
     private var window: NSPanel?
     private let label = NSTextField(labelWithString: "")
     private let modeLabel = NSTextField(labelWithString: "")
-    func update(_ session: FocusSession?) {
-        guard let session, session.status != .ended else { window?.orderOut(nil); return }
+    func update(_ session: FocusSession?, rest: PomodoroBreak? = nil) {
+        let active = session.flatMap { $0.status == .ended ? nil : $0 }
+        guard active != nil || rest != nil else { window?.orderOut(nil); return }
         if window == nil, let screen = NSScreen.screens.first {
             let panel = NSPanel(contentRect: CGRect(x: screen.visibleFrame.maxX - 452, y: screen.visibleFrame.minY + 24, width: 420, height: 132),
                                 styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -267,8 +398,16 @@ private final class FocusCountdown {
             modeLabel.textColor = .white; modeLabel.alignment = .right
             panel.contentView?.addSubview(label); panel.contentView?.addSubview(modeLabel); window = panel
         }
-        label.stringValue = (session.status == .paused ? "Ⅱ " : "") + FocusSession.clock(session.remaining)
-        modeLabel.stringValue = session.isDeveloperMode ? "DEVELOPER MODE · 4×" : ""
+        if let session = active {
+            label.stringValue = (session.status == .paused ? "Ⅱ " : "") + FocusSession.clock(session.remaining)
+            label.textColor = .white
+            modeLabel.stringValue = session.isDeveloperMode ? "DEVELOPER MODE · 4×" : ""
+        } else if let rest {
+            // Break: green, so it's clear at a glance this isn't work time.
+            label.stringValue = (rest.paused ? "Ⅱ " : "☕︎ ") + FocusSession.clock(rest.remaining)
+            label.textColor = NSColor(hex: 0x5BE49B)
+            modeLabel.stringValue = rest.kind == .long ? "LONG BREAK" : "BREAK"
+        }
         window?.orderFrontRegardless()
     }
 }

@@ -42,10 +42,52 @@ final class Settings {
         set { defaults.set(newValue, forKey: "computerControl"); onChange?() }
     }
 
+    /// Bluey lives in the MacBook's notch and works without the phone (voice and focus run on the Mac).
+    var notchMode: Bool {
+        get { defaults.object(forKey: "notchMode") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "notchMode"); onChange?() }
+    }
+
+    /// Keep a daily journal of what you worked on (~/Documents/Bluey Journal).
+    var journalEnabled: Bool {
+        get { defaults.object(forKey: "journalEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "journalEnabled"); onChange?() }
+    }
+
+    /// Send each day's journal to Hermes, so it knows your days.
+    var journalToHermes: Bool {
+        get { defaults.object(forKey: "journalToHermes") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "journalToHermes"); onChange?() }
+    }
+
+    /// From this hour, today's journal goes to Hermes (finished days go the next time Bluey runs).
+    var journalHour: Int {
+        get { defaults.object(forKey: "journalHour") as? Int ?? 18 }
+        set { defaults.set(min(23, max(0, newValue)), forKey: "journalHour"); onChange?() }
+    }
+
+    /// Hidden with the hide shortcut: no notch, pointer or avatar until shown again.
+    var hidden: Bool {
+        get { defaults.bool(forKey: "hidden") }
+        set { defaults.set(newValue, forKey: "hidden"); onChange?() }
+    }
+
+    /// What his pointer looks like (the Keramik drone by default).
+    var pointerStyle: PointerStyle {
+        get { PointerStyle(rawValue: defaults.string(forKey: "pointerStyle") ?? "") ?? .drone }
+        set { defaults.set(newValue.rawValue, forKey: "pointerStyle"); onChange?() }
+    }
+
     /// How the cursor's path shows while it flies.
     var trail: PointerTrail {
         get { PointerTrail(rawValue: defaults.string(forKey: "trail") ?? "") ?? .comet }
         set { defaults.set(newValue.rawValue, forKey: "trail"); onChange?() }
+    }
+
+    /// Shows the user's Keramik avatar in a small floating window.
+    var showAvatarWindow: Bool {
+        get { defaults.object(forKey: "showAvatarWindow") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "showAvatarWindow"); onChange?() }
     }
 
     /// The mood picked by hand in the menu.

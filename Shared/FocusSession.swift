@@ -47,6 +47,8 @@ public struct FocusSession: Codable, Identifiable, Equatable, Sendable {
     public var developerMode: Bool?
     public var usedDeveloperMode: Bool?
     public var realElapsed: Double?
+    /// ActivityWatch's view of this session's time window: real keyboard/mouse time and the apps it went to.
+    public var activity: ActivitySummary?
     public var isDeveloperMode: Bool { developerMode == true }
     public var clockRate: Double { isDeveloperMode ? 4 : 1 }
     public var checkInterval: Double { isDeveloperMode ? 10 : 30 } // real seconds
@@ -90,9 +92,16 @@ public struct FocusSync: Codable, Sendable {
     public var revision: Int
     public var sentAt: Date
     public var developerMode: Bool?
-    public init(current: FocusSession?, history: [FocusSession], revision: Int, developerMode: Bool = false) {
+    /// Pomodoro rhythm and the break in progress (optional so older peers still decode).
+    public var pomodoro: PomodoroRhythm?
+    public var rest: PomodoroBreak?
+    /// Focus rounds finished in the current Pomodoro cycle.
+    public var completedRounds: Int?
+    public init(current: FocusSession?, history: [FocusSession], revision: Int, developerMode: Bool = false,
+                pomodoro: PomodoroRhythm? = nil, rest: PomodoroBreak? = nil, completedRounds: Int? = nil) {
         self.current = current; self.history = history; self.revision = revision; self.sentAt = Date()
         self.developerMode = developerMode
+        self.pomodoro = pomodoro; self.rest = rest; self.completedRounds = completedRounds
     }
 }
 

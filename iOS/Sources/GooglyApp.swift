@@ -45,6 +45,11 @@ struct AppShell: View {
     @State private var scanPairing = false
     @State private var showSettings = false
     @AppStorage("workspaceTab") private var tabRaw = WorkspaceTab.chat.rawValue
+    @StateObject private var hermes = HermesClient()
+    @State private var showHermes = false
+    @StateObject private var hub = HubClient()
+    @State private var showHub = false
+    @State private var testingAvatar = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -80,8 +85,16 @@ struct AppShell: View {
             }
         }
         .fullScreenCover(isPresented: $showFace) {
-            FaceScreen(link: link, live: live, focus: focus, animator: animator,
-                       showFocus: $showFocus, scanPairing: $scanPairing, close: { showFace = false })
+            FaceScreen(link: link, live: live, focus: focus, hermes: hermes, animator: animator,
+                       showFocus: $showFocus, scanPairing: $scanPairing, testingAvatar: $testingAvatar,
+                       openHermes: { showFace = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showHermes = true } },
+                       openHub: { showFace = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showHub = true } },
+                       close: { showFace = false })
+        }
+        // Hermes (through the Mac) and the hub (chats, todos and notes without the Mac).
+        .fullScreenCover(isPresented: $showHermes) { HermesView(hermes: hermes, link: link) }
+        .fullScreenCover(isPresented: $showHub, onDismiss: { OrientationLock.set(.portrait) }) {
+            HubRootView(hub: hub) { showHub = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showFace = true } }
         }
         // While his face is up, it presents these itself.
         .sheet(isPresented: Binding(get: { scanPairing && !showFace }, set: { scanPairing = $0 })) { QRPairingView(link: link) }
@@ -92,6 +105,7 @@ struct AppShell: View {
             workspace?.connectionChanged(connected)
             if !connected { live.sleep() }
             if connected {
+                hermes.sync()
                 NotesSync.retryPending(store: store, link: link)
                 store.resyncRecent()
             }
@@ -121,8 +135,11 @@ struct AppShell: View {
 
     private var settings: some View {
         BlueyAppView(store: store, live: live, link: link, focus: focus,
+                     openHermes: { showSettingsThen { showHermes = true } },
+                     openHub: { showSettingsThen { showHub = true } },
                      openFocus: { showSettingsThen { showFocus = true } },
-                     pairMac: { showSettingsThen { scanPairing = true } }) { showSettings = false }
+                     pairMac: { showSettingsThen { scanPairing = true } },
+                     testAvatar: { showSettingsThen { testingAvatar = true; showFace = true } }) { showSettings = false }
     }
 
     private func showSettingsThen(_ action: @escaping () -> Void) {
@@ -173,6 +190,7 @@ struct AppShell: View {
         PomodoroLiveActivity.update(from: workspace.model.snapshot)
         self.workspace = workspace
         focus.attach(link)
+        hermes.attach(link)
         focus.onFinished = { showFocus = true; live.sleep() }
         link.onFocusState = { [focus] in focus.receive($0) }
         link.onFace = { [animator] face in animator.receive(face, at: Date().timeIntervalSinceReferenceDate) }
@@ -230,9 +248,16 @@ struct AppShell: View {
             }
         }
         live.onCodexNote = { [store] text in store.codex(text) }
-        link.onCommand = { [live, focus, workspace] command, text in
+        link.onCommand = { [live, focus, workspace, hermes, hub] command, text in
             if workspace.receive(command: command, text: text) { return }
             switch command {
+            case "hermesState": hermes.receive(text ?? "")
+            case "hermesChirp": live.focusChirp()
+            case "hubConfig":
+                // The paired Mac shares where the hub is (over the encrypted link).
+                if let data = text?.data(using: .utf8), let config = try? JSONDecoder().decode(HubConfig.self, from: data) {
+                    hub.configure(config)
+                }
             case "wake": live.wake()
             case "sleep": live.sleep()
             case "codexNote": live.codexNote(text ?? "")
@@ -251,20 +276,42 @@ struct FaceScreen: View {
     @ObservedObject var link: MacLink
     @ObservedObject var live: LiveVoice
     @ObservedObject var focus: FocusClient
+    @ObservedObject var hermes: HermesClient
     let animator: FaceAnimator
     @Binding var showFocus: Bool
     @Binding var scanPairing: Bool
+    @Binding var testingAvatar: Bool
+    var openHermes: () -> Void
+    var openHub: () -> Void
     var close: () -> Void
+    @AppStorage(AvatarStyle.defaultsKey) private var avatar: AvatarStyle = .keramik3D
+    @State private var avatarReaction: KeramikReaction?
+    @State private var testMood: String?
     @State private var showPairing = true
     @State private var holdStart: DispatchWorkItem?
     @State private var holdingToAsk = false
 
     var body: some View {
         ZStack {
-            FaceView(animator: animator)
+            Group {
+                switch avatar {
+                case .bluey: FaceView(animator: animator)
+                case .keramik: KeramikFace(animator: animator, reaction: avatarReaction, moodOverride: testMood)
+                case .keramik3D: KeramikFace(animator: animator, reaction: avatarReaction, moodOverride: testMood, model3D: true)
+                }
+            }
+            .allowsHitTesting(false)
+            Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { live.toggle() }  // double tap: wake up / back to follow mode
                 .simultaneousGesture(holdToAsk)
+
+            if testingAvatar && avatar != .bluey {
+                AvatarTestBar(mood: $testMood, react: react) {
+                    testingAvatar = false
+                    testMood = nil
+                }
+            }
 
             ModeIndicator(state: live.state)
 
@@ -285,8 +332,24 @@ struct FaceScreen: View {
             .padding(.trailing, 62)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
 
+            // Hermes: turns yellow while Hermes waits for an approval or an answer.
+            Button(action: openHermes) {
+                let waiting = !hermes.waiting.isEmpty
+                Image(systemName: waiting ? "exclamationmark.bubble.fill" : "sparkles")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(waiting ? Color.black : .white.opacity(0.35))
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(waiting ? Color(hex: 0xFFD66B) : Color.white.opacity(0.06)).frame(width: 34, height: 34))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(hermes.waiting.isEmpty ? "Open Hermes" : "Hermes is waiting for you")
+            .padding(.top, 10)
+            .padding(.trailing, 108)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+
             if showPairing && !link.connected {
-                PairingView { withAnimation(.easeOut(duration: 0.3)) { showPairing = false; scanPairing = true } }
+                PairingView(onPlay: { withAnimation(.easeOut(duration: 0.3)) { showPairing = false; scanPairing = true } },
+                            openHub: openHub)
                     .transition(.opacity)
             }
         }
@@ -307,6 +370,11 @@ struct FaceScreen: View {
         .onChange(of: link.connected) { _, connected in
             if connected { withAnimation(.easeOut(duration: 0.4)) { showPairing = false } }
         }
+        .onChange(of: focus.history.count) { old, new in if new > old { react("confetti") } }
+    }
+
+    private func react(_ name: String) {
+        avatarReaction = KeramikReaction(name, id: (avatarReaction?.id ?? 0) + 1)
     }
 
     /// Press and hold the screen to ask him something; let go and he answers.
@@ -331,6 +399,80 @@ struct FaceScreen: View {
                     live.endAsk()
                 }
             }
+    }
+}
+
+/// The user's Keramik avatar, driven by the same animator moods as Bluey's face.
+struct KeramikFace: View {
+    let animator: FaceAnimator
+    var reaction: KeramikReaction?
+    /// A mood picked on the test bar wins over the live one.
+    var moodOverride: String?
+    var model3D = false
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
+            let frame = animator.step(timeline.date.timeIntervalSinceReferenceDate)
+            KeramikAvatarView(mood: moodOverride ?? KeramikMapping.mood(frame.mood), gaze: frame.gaze, reaction: reaction,
+                              zoom: model3D ? 1.0 : 1.4, model3D: model3D)
+        }
+        .background(Color.black)
+        .ignoresSafeArea()
+    }
+}
+
+/// Buttons along the bottom of the face to try every mood and reaction of the Keramik avatar.
+struct AvatarTestBar: View {
+    @Binding var mood: String?
+    var react: (String) -> Void
+    var close: () -> Void
+
+    var body: some View {
+        VStack(spacing: 6) {
+            row {
+                ForEach(KeramikTest.moods, id: \.id) { item in
+                    chip(item.title, on: mood == item.id) { mood = item.id }
+                }
+                chip("Live", on: mood == nil) { mood = nil }
+            }
+            row {
+                ForEach(KeramikTest.reactions, id: \.id) { item in
+                    chip(item.title, on: false) { react(item.id) }
+                }
+            }
+            HStack(spacing: 6) {
+                row {
+                    ForEach(KeramikTest.activities + KeramikTest.power, id: \.id) { item in
+                        chip(item.title, on: false) { react(item.id) }
+                    }
+                }
+                Button(action: close) {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 30, height: 30).background(Circle().fill(Color.white.opacity(0.18)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close avatar test")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    /// One scrolling row of chips (there are more than fit across the screen).
+    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) { content() } }
+    }
+
+    private func chip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(on ? .black : .white)
+                .padding(.horizontal, 10).frame(height: 30)
+                .background(Capsule().fill(on ? Color.white : Color.white.opacity(0.18)))
+        }
+        .buttonStyle(.plain)
     }
 }
 

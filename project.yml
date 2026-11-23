@@ -21,6 +21,12 @@ targets:
       - path: iOS/Common
       - path: App
       - path: Shared
+      - path: vendor/keramik-avatar/keramik-avatar.js
+        buildPhase: resources
+      - path: vendor/keramik-3d/three.min.js
+        buildPhase: resources
+      - path: vendor/keramik-3d/keramik-3d.js
+        buildPhase: resources
     dependencies:
       - target: BlueyWidgets
       - target: BlueyBroadcast
@@ -60,6 +66,8 @@ targets:
         NSLocalNetworkUsageDescription: Bluey finds the Mac app on your Wi-Fi so the character can look where it points.
         NSCameraUsageDescription: Bluey scans a private pairing code on your Mac to securely connect.
         NSMicrophoneUsageDescription: Talk to your blueberry. He listens while he's awake (double tap him to wake him up or put him to sleep).
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         NSBonjourServices:
           - _googly._tcp
         UIAppFonts:
@@ -67,6 +75,9 @@ targets:
           - IBMPlexSans.ttf
           - IBMPlexMono-Regular.ttf
           - IBMPlexMono-Medium.ttf
+          - DMSans-Regular.ttf
+          - DMSans-Medium.ttf
+          - DMSans-Bold.ttf
 
   # Live Activity on the Lock Screen and in the Dynamic Island ("Bluey fragen", call status).
   BlueyWidgets:
