@@ -199,10 +199,14 @@ final class FocusCompanion {
                 let answer = try await self.classify(screen, session, idle.isFinite ? idle : 0)
                 guard self.allowed, self.generation == token, !Task.isCancelled else { return }
                 let age = now() - began
-                var check = FocusCheck(elapsed: session.elapsed, activity: age <= 20 ? answer.activity : .unavailable,
+                let activity: FocusActivity = age <= 20 ? answer.activity : .unavailable
+                let app = screen.app?.trimmingCharacters(in: .whitespacesAndNewlines)
+                var check = FocusCheck(elapsed: session.elapsed, activity: activity,
                                        probability: answer.probability, confidence: answer.confidence,
                                        probabilities: age <= 20 ? answer.probabilities : nil,
-                                       sampleDuration: session.observationDuration)
+                                       sampleDuration: session.observationDuration,
+                                       distraction: activity == .offTask ? answer.distraction : nil,
+                                       distractionApp: activity == .offTask ? app.flatMap { $0.isEmpty ? nil : $0 } : nil)
                 let shouldNudge = self.policy.observe(check, age: age)
                 self.current?.detail = age > 20 ? "Last check was stale; skipped" : answer.activity == .uncertain ? "Not enough context to judge" : answer.activity == .onTask ? "On task" : "Off task · checking again before nudging"
                 self.current?.checks.append(check)
