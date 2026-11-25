@@ -49,6 +49,8 @@ struct AppShell: View {
     @State private var showHermes = false
     @StateObject private var hub = HubClient()
     @State private var showHub = false
+    @State private var showChatScreen = false
+    @State private var screenThreadID: UUID?
     @State private var testingAvatar = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -65,6 +67,29 @@ struct AppShell: View {
             } else {
                 Color.black
             }
+        }
+        .sheet(isPresented: $showChatScreen) {
+            HermesScreenView(request: try? hub.screenRequest(),
+                             hasApprovals: hermes.waiting.contains { screenThreadID != nil && $0.run.workspaceThreadID == screenThreadID },
+                             activity: {
+                if let id = screenThreadID,
+                   let run = hermes.state?.runs.last(where: { $0.workspaceThreadID == id && $0.isActive }) {
+                    let model = workspace?.model
+                    let tool = model?.thread(id)?.messages.last.flatMap { model?.liveTools[$0.id] }
+                    WorkspaceHermesActivity(
+                        title: run.pending.isEmpty ? (tool?.title ?? run.activity ?? "Hermes arbeitet …") : "Wartet auf deine Antwort",
+                        tool: tool,
+                        stop: { hermes.stop(run.id) }
+                    )
+                }
+            }, approvals: {
+                let approvals = hermes.waiting.filter { screenThreadID != nil && $0.run.workspaceThreadID == screenThreadID }
+                ForEach(approvals, id: \.prompt.id) { run, prompt in
+                    WorkspaceHermesPromptCard(prompt: prompt) { answer in
+                        try await hermes.answerFromScreen(run: run.id, prompt: prompt.id, choice: answer)
+                    }
+                }
+            })
         }
         .fullScreenCover(isPresented: $showCall) {
             CallView(call: call) { showCall = false; call.reset() }
@@ -149,7 +174,7 @@ struct AppShell: View {
         if orientation.isPortrait {
             showFace = false
         } else if orientation.isLandscape,
-                  !showSettings, !showCall, !showHub, !showHermes, !scanPairing, !showFocus {
+                  !showSettings, !showCall, !showHub, !showHermes, !showChatScreen, !scanPairing, !showFocus {
             showFace = true
         }
     }
@@ -200,6 +225,15 @@ struct AppShell: View {
         guard workspace == nil else { return }
         let workspace = PhoneWorkspace(link: link)
         wireCall(workspace: workspace)
+        workspace.model.openHermesScreen = { id in
+            screenThreadID = id
+            showChatScreen = true
+            hermes.sync()
+        }
+        workspace.model.answerHermesApproval = { [hermes] approval, choice in
+            try await hermes.answerFromScreen(run: approval.runID, prompt: approval.prompt.id, choice: choice)
+        }
+        workspace.model.loadHermesModels = { [hub] in try await hub.modelCatalog() }
         workspace.model.focusHistory = focus.history
         workspace.model.focusCommand = { [focus] command, task, minutes in
             focus.command(command, task: task, minutes: minutes)
@@ -272,7 +306,12 @@ struct AppShell: View {
         link.onCommand = { [live, focus, workspace, hermes, hub] command, text in
             if workspace.receive(command: command, text: text) { return }
             switch command {
-            case "hermesState": hermes.receive(text ?? "")
+            case "hermesState":
+                hermes.receive(text ?? "")
+                workspace.model.hermesApprovals = hermes.waiting.compactMap { run, prompt in
+                    guard let threadID = run.workspaceThreadID else { return nil }
+                    return WorkspaceHermesApproval(threadID: threadID, runID: run.id, prompt: prompt)
+                }
             case "hermesChirp": live.focusChirp()
             case "hubConfig":
                 // The paired Mac shares where the hub is (over the encrypted link).

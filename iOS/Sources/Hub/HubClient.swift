@@ -48,7 +48,7 @@ struct HermesSession: Identifiable, Equatable {
         self.id = id
         let title = (json["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let preview = (json["preview"] as? String ?? "").replacingOccurrences(of: "\n", with: " ")
-        self.title = title.isEmpty ? (preview.isEmpty ? "New chat" : String(preview.prefix(60))) : title
+        self.title = title.isEmpty ? (preview.isEmpty ? "Neuer Chat" : String(preview.prefix(60))) : title
         self.preview = preview
         self.source = json["source"] as? String ?? "api_server"
         let last = (json["last_active"] as? Double) ?? (json["started_at"] as? Double) ?? 0
@@ -130,9 +130,9 @@ enum HubError: LocalizedError {
     case notConfigured, unreachable(String), refused(Int, String)
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Connect the hub in Settings first."
-        case .unreachable(let why): return "Can't reach the hub (\(why)). Is Tailscale on?"
-        case .refused(let code, let why): return "Hub said \(code): \(why.prefix(160))"
+        case .notConfigured: return "Verbinde den Hub zuerst in den Einstellungen."
+        case .unreachable(let why): return "Hub nicht erreichbar (\(why)). Ist Tailscale aktiv?"
+        case .refused(let code, let why): return "Hub-Fehler \(code): \(why.prefix(160))"
         }
     }
 }
@@ -153,9 +153,12 @@ final class HubClient: ObservableObject {
     @Published private(set) var online = false
     @Published private(set) var problem: String?
     @Published var sessions: [HermesSession] = []
+    @Published private(set) var pendingSessions: [String: HermesSession] = [:]
+    @Published private(set) var draftSessions: [String: HermesSession] = [:]
     @Published var notes: [HubNote] = []
     @Published var todos: [HubTodo] = []
 
+    private var conversations: [String: HubThreadConversation] = [:]
     private var todoAddRevision = 0
     private var lastChanges: [String: Double] = [:]
     private var poller: Task<Void, Never>?
@@ -169,6 +172,11 @@ final class HubClient: ObservableObject {
 
     func configure(_ config: HubConfig) {
         config.save()
+        if self.config?.url != config.url {
+            conversations.removeAll()
+            pendingSessions.removeAll()
+            draftSessions.removeAll()
+        }
         self.config = config
         Task { await refreshAll() }
     }
@@ -242,6 +250,51 @@ final class HubClient: ObservableObject {
 
     // MARK: Hermes threads
 
+    func conversation(for sessionID: String, fresh: Bool) -> HubThreadConversation {
+        if let conversation = conversations[sessionID] { return conversation }
+        let conversation = HubThreadConversation(hub: self, sessionID: sessionID, fresh: fresh)
+        conversations[sessionID] = conversation
+        return conversation
+    }
+
+    func updateDraft(_ conversation: HubThreadConversation) {
+        let id = conversation.sessionID
+        guard conversations[id] === conversation else { return }
+        let text = conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if conversation.isLocalDraft, !text.isEmpty || conversation.options != HermesChatOptions() {
+            draftSessions[id] = HermesSession([
+                "id": id,
+                "preview": text,
+                "last_active": Date().timeIntervalSince1970
+            ])
+        } else {
+            draftSessions[id] = nil
+        }
+    }
+
+    func discardDraft(_ id: String) {
+        guard draftSessions[id] != nil, pendingSessions[id] == nil else { return }
+        conversations[id] = nil
+        draftSessions[id] = nil
+    }
+
+    func markPending(_ conversation: HubThreadConversation, text: String) {
+        let id = conversation.sessionID
+        guard conversations[id] === conversation, let row = HermesSession([
+            "id": id,
+            "source": "api_server",
+            "preview": text,
+            "last_active": Date().timeIntervalSince1970
+        ]) else { return }
+        pendingSessions[id] = row
+    }
+
+    func clearPending(_ conversation: HubThreadConversation) {
+        let id = conversation.sessionID
+        guard conversations[id] === conversation else { return }
+        pendingSessions[id] = nil
+    }
+
     func refreshSessions() async {
         guard let json = try? await call("hermes/api/sessions", body: nil) as? [String: Any],
               let data = json["data"] as? [[String: Any]] else { return }
@@ -255,15 +308,22 @@ final class HubClient: ObservableObject {
         return data.compactMap(HermesMessage.init).sorted { $0.date < $1.date }
     }
 
+    func modelCatalog() async throws -> HermesModelCatalog {
+        try decode(HermesModelCatalog.self, try await call("hermes/api/model/options?include_unconfigured=false"))
+    }
+
     /// Starts a Hermes run in a thread. Returns the run id.
-    func send(_ text: String, session sessionID: String) async throws -> String {
+    func send(_ text: String, session sessionID: String, options: HermesChatOptions = HermesChatOptions()) async throws -> String {
         let instructions = """
         The user is writing from the Bluey app on their iPhone (a chat like T3 Code's, with their notes and todos). \
         Answer in Markdown, concise. Their notes and todos live in Bluey Hub: use the `bluey-hub` command \
         (see the bluey-hub skill) to read or change them when asked.
         """
-        guard let json = try await call("hermes/v1/runs", method: "POST",
-                                        body: ["input": text, "session_id": sessionID, "instructions": instructions]) as? [String: Any],
+        var body = options.requestFields
+        body["input"] = text
+        body["session_id"] = sessionID
+        body["instructions"] = instructions
+        guard let json = try await call("hermes/v1/runs", method: "POST", body: body) as? [String: Any],
               let id = json["run_id"] as? String else { throw HubError.refused(0, "no run id") }
         return id
     }
@@ -370,6 +430,12 @@ final class HubClient: ObservableObject {
     func deleteTodo(_ id: String) async {
         todos.removeAll { $0.id == id }
         _ = try? await call("todos/\(id)", method: "DELETE")
+    }
+
+    func screenRequest() throws -> URLRequest {
+        var screen = try request("screen")
+        screen.cachePolicy = .reloadIgnoringLocalCacheData
+        return screen
     }
 
     func health() async -> Bool {

@@ -2,7 +2,7 @@
 """Bluey Hub: notes, todos and a Hermes gateway for the Bluey apps, without the laptop.
 
 Runs next to Hermes Agent (e.g. on an always-on home server) and is reached over Tailscale.
-Python 3.9+ standard library only.
+Python 3.9+ with optional viewer dependencies in screen/requirements.txt.
 
     bluey_hub.py serve [--host 127.0.0.1] [--port 8766]   # the HTTP API (see API below)
     bluey_hub.py note add "text" | note list | note show ID | note edit ID "text" | note rm ID
@@ -48,6 +48,7 @@ import uuid
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 
 VERSION = "1"
 HOME = Path(os.environ.get("BLUEY_HUB_HOME", Path.home() / "bluey-hub"))
@@ -276,6 +277,15 @@ def changes():
 
 # ---------------------------------------------------------------- HTTP
 
+def authorized(headers, cfg):
+    got = headers.get("Authorization", "")
+    if got and secrets.compare_digest(got, "Bearer " + cfg["key"]):
+        return True
+    login = headers.get("Tailscale-User-Login", "").strip().lower()
+    allowed = [value.strip().lower() for value in cfg.get("tailnet_logins", []) if value.strip()]
+    return bool(login) and login in allowed
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "BlueyHub/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -299,13 +309,7 @@ class Handler(BaseHTTPRequestHandler):
         return json.loads(raw.decode("utf-8")) if raw else {}
 
     def authorized(self):
-        cfg = self.server.cfg
-        got = self.headers.get("Authorization", "")
-        if got and secrets.compare_digest(got, "Bearer " + cfg["key"]):
-            return True
-        login = self.headers.get("Tailscale-User-Login", "").strip().lower()
-        allowed = [l.strip().lower() for l in cfg.get("tailnet_logins", []) if l.strip()]
-        return bool(login) and login in allowed
+        return authorized(self.headers, self.server.cfg)
 
     def route(self, method):
         path = self.path.split("?")[0].rstrip("/") or "/"
@@ -419,11 +423,24 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(host, port):
     cfg = load_config()
-    httpd = ThreadingHTTPServer((host, port), Handler)
-    httpd.daemon_threads = True
-    httpd.cfg = cfg
-    print("Bluey Hub %s on http://%s:%d (data in %s)" % (VERSION, host, port, HOME), flush=True)
-    httpd.serve_forever()
+    screen_enabled = bool(cfg.get("hermes_screen"))
+    address = ("127.0.0.1", 0) if screen_enabled else (host, port)
+    with ThreadingHTTPServer(address, Handler) as httpd:
+        httpd.daemon_threads = True
+        httpd.cfg = cfg
+        print("Bluey Hub %s on http://%s:%d (data in %s)" % (VERSION, host, port, HOME), flush=True)
+        if not screen_enabled:
+            httpd.serve_forever()
+            return
+        from bluey_screen import serve_screen
+
+        worker = Thread(target=httpd.serve_forever, daemon=True)
+        worker.start()
+        try:
+            serve_screen(host, port, httpd, cfg, authorized)
+        finally:
+            httpd.shutdown()
+            worker.join()
 
 
 # ---------------------------------------------------------------- CLI (for Hermes and you)

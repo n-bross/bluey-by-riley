@@ -24,11 +24,11 @@ struct BlueyAppView: View {
                     VStack(spacing: 0) {
                         sidebar
                         NavigationLink {
-                            sessionList.background(Color.black)
+                            sessionList.background(Theme.background)
                         } label: {
                             HStack {
                                 Image(systemName: "text.bubble")
-                                Text("Voice history")
+                                Text("Sprachverlauf")
                                 Spacer()
                                 Text("\(store.sessions.count)").font(.plexMono(13))
                                 Image(systemName: "chevron.right")
@@ -37,26 +37,26 @@ struct BlueyAppView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 22)
                             .frame(minHeight: 54)
-                            .background(Color(hex: Palette.panel))
+                            .background(Theme.panel)
                         }
                     }
                 } else {
                     HStack(spacing: 0) {
                         sidebar
                             .frame(width: 300)
-                            .background(Color(hex: Palette.panel).opacity(0.6))
+                            .background(Theme.panel.opacity(0.6))
                         sessionList
                     }
                 }
             }
-            .background(Color.black)
+            .background(Theme.background)
             .navigationDestination(for: UUID.self) { id in
                 SessionDetailView(store: store, id: id)
             }
             .toolbar(.hidden, for: .navigationBar)
         }
         .preferredColorScheme(.dark)
-        .tint(Color(hex: Palette.berry1))
+        .tint(Theme.accentLight)
         .onAppear { volume = live.volume }
     }
 
@@ -74,20 +74,20 @@ struct BlueyAppView: View {
                             .foregroundStyle(.white)
                         HStack(spacing: 6) {
                             Circle()
-                                .fill(link.connected ? Color(hex: 0x5BE49B) : Color(hex: Palette.inkSoft).opacity(0.5))
+                                .fill(link.connected ? Color(hex: 0x5BE49B) : Theme.soft.opacity(0.5))
                                 .frame(width: 7, height: 7)
-                            Text(link.connected ? (link.macName ?? link.currentMac ?? "Mac") : "Looking for your Mac")
+                            Text(link.connected ? (link.macName ?? link.currentMac ?? "Mac") : "Suche deinen Mac …")
                                 .font(.plexSans(12))
-                                .foregroundStyle(Color(hex: Palette.inkSoft))
+                                .foregroundStyle(Theme.soft)
                                 .lineLimit(1)
                         }
                     }
                 }
 
-                Button("Focus sessions", action: openFocus).buttonStyle(.borderedProminent)
+                Button("Fokus-Sessions", action: openFocus).buttonStyle(.borderedProminent)
                 Button("Hermes", action: openHermes).buttonStyle(.borderedProminent)
-                Button("Chats, Todos & Notes", action: openHub).buttonStyle(.borderedProminent)
-                Button("Pair Mac (QR)", action: pairMac).buttonStyle(.bordered)
+                Button("Chats, Todos und Notizen", action: openHub).buttonStyle(.borderedProminent)
+                Button("Mac koppeln (QR)", action: pairMac).buttonStyle(.bordered)
 
                 Button {
                     let starting = live.state == .asleep
@@ -96,7 +96,7 @@ struct BlueyAppView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: live.state == .asleep ? "play.fill" : "stop.fill")
-                        Text(live.state == .asleep ? "Start listening" : "Stop listening")
+                        Text(live.state == .asleep ? "Zuhören starten" : "Zuhören beenden")
                     }
                     .font(.fredoka(18))
                     .foregroundStyle(.white)
@@ -114,15 +114,15 @@ struct BlueyAppView: View {
                 .opacity(!link.connected && live.state == .asleep ? 0.5 : 1)
 
                 Text(live.state == .asleep
-                     ? "He listens the whole session. Hold his face to ask something, let go and he answers."
-                     : "Listening. Hold his face to ask; use Focus sessions for the task and timer.")
+                     ? "Bluey hört während der Session zu. Halte sein Gesicht zum Fragen gedrückt und lass es für die Antwort los."
+                     : "Bluey hört zu. Halte sein Gesicht zum Fragen gedrückt. Timer und Aufgaben findest du unter Fokus-Sessions.")
                     .font(.plexSans(12))
-                    .foregroundStyle(Color(hex: Palette.inkSoft))
+                    .foregroundStyle(Theme.soft)
 
                 Divider().overlay(Color.white.opacity(0.08))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    label("Chirp volume")
+                    label("Tonlautstärke")
                     Slider(value: Binding(get: { volume }, set: { volume = $0; live.volume = $0 }), in: 0...1)
                 }
 
@@ -133,7 +133,7 @@ struct BlueyAppView: View {
                     }
                     .pickerStyle(.segmented)
                     if avatar != .bluey {
-                        Button("Test moods and reactions", action: testAvatar).buttonStyle(.bordered)
+                        Button("Stimmungen und Reaktionen testen", action: testAvatar).buttonStyle(.bordered)
                     }
                 }
 
@@ -147,7 +147,7 @@ struct BlueyAppView: View {
                                     Spacer()
                                     if name == link.currentMac {
                                         Image(systemName: link.connected ? "checkmark" : "ellipsis")
-                                            .foregroundStyle(Color(hex: Palette.berry2))
+                                            .foregroundStyle(Theme.accentLight)
                                     }
                                 }
                                 .frame(minHeight: 34)
@@ -178,7 +178,7 @@ struct BlueyAppView: View {
         Text(text)
             .font(.plexMono(11))
             .textCase(.uppercase)
-            .foregroundStyle(Color(hex: Palette.inkSoft))
+            .foregroundStyle(Theme.soft)
     }
 
     // MARK: Right: sessions
@@ -186,13 +186,13 @@ struct BlueyAppView: View {
     private var sessionList: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Voice history")
+                Text("Sprachverlauf")
                     .font(.fredoka(24))
                     .foregroundStyle(.white)
                 Spacer()
                 Text("\(store.sessions.count)")
                     .font(.plexMono(13))
-                    .foregroundStyle(Color(hex: Palette.inkSoft))
+                    .foregroundStyle(Theme.soft)
             }
             .padding(.horizontal, 22)
             .padding(.top, 20)
@@ -202,13 +202,13 @@ struct BlueyAppView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "text.bubble")
                         .font(.system(size: 34))
-                        .foregroundStyle(Color(hex: Palette.berry2))
-                    Text("No sessions yet")
+                        .foregroundStyle(Theme.accentLight)
+                    Text("Noch keine Gespräche")
                         .font(.fredoka(18))
                         .foregroundStyle(.white)
-                    Text("Start one and your transcript and his replies show up here.")
+                    Text("Hier erscheinen deine Transkripte und Blueys Antworten.")
                         .font(.plexSans(13))
-                        .foregroundStyle(Color(hex: Palette.inkSoft))
+                        .foregroundStyle(Theme.soft)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -217,7 +217,7 @@ struct BlueyAppView: View {
                         NavigationLink(value: session.id) {
                             SessionRow(session: session, live: session.id == store.currentID)
                         }
-                        .listRowBackground(Color(hex: Palette.panel))
+                        .listRowBackground(Theme.panel)
                     }
                     .onDelete { offsets in
                         offsets.map { store.sessions[$0].id }.forEach(store.delete)
@@ -252,17 +252,17 @@ private struct SessionRow: View {
                 }
                 Text(session.summary)
                     .font(.plexSans(13))
-                    .foregroundStyle(Color(hex: Palette.inkSoft))
+                    .foregroundStyle(Theme.soft)
                     .lineLimit(1)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 Text(Self.duration(session.duration))
                     .font(.plexMono(12))
-                    .foregroundStyle(Color(hex: Palette.inkSoft))
+                    .foregroundStyle(Theme.soft)
                 Text("\(session.questionCount) asked")
                     .font(.plexMono(11))
-                    .foregroundStyle(Color(hex: Palette.berry1))
+                    .foregroundStyle(Theme.accentLight)
             }
         }
         .padding(.vertical, 4)
@@ -329,7 +329,7 @@ struct SessionDetailView: View {
                         Text("\(SessionRow.duration(session.duration)) · \(session.questionCount) asked"
                              + (session.transcribing > 0 ? " · transcribing \(session.transcribing) chunk\(session.transcribing == 1 ? "" : "s")…" : ""))
                             .font(.plexMono(11))
-                            .foregroundStyle(Color(hex: Palette.inkSoft))
+                            .foregroundStyle(Theme.soft)
                     }
                 }
                 Spacer()
@@ -373,7 +373,7 @@ struct SessionDetailView: View {
                 }
             }
         }
-        .background(Color.black)
+        .background(Theme.background)
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -381,7 +381,7 @@ struct SessionDetailView: View {
 private struct EntryView: View {
     static func speakerColor(_ speaker: String?) -> Color {
         let colors: [UInt32] = [0x8FB3FF, 0x5BE49B, 0xFFB86B, 0xFF9AD0, 0xC79BFF, 0x6BE3E0]
-        guard let first = speaker?.unicodeScalars.first?.value, speaker != "?" else { return Color(hex: Palette.inkSoft) }
+        guard let first = speaker?.unicodeScalars.first?.value, speaker != "?" else { return Theme.soft }
         return Color(hex: colors[Int(first) % colors.count])
     }
 
@@ -403,13 +403,13 @@ private struct EntryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(entry.time.formatted(date: .omitted, time: .shortened))
                     .font(.plexMono(10))
-                    .foregroundStyle(Color(hex: Palette.inkSoft).opacity(0.7))
+                    .foregroundStyle(Theme.soft.opacity(0.7))
                     .padding(.top, 3)
             }
         case .heard:
             Text(entry.text)
                 .font(.plexSans(14))
-                .foregroundStyle(Color(hex: Palette.inkSoft))
+                .foregroundStyle(Theme.soft)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 4)
         case .asked:
@@ -418,7 +418,7 @@ private struct EntryView: View {
                 VStack(alignment: .trailing, spacing: 3) {
                     Text("You asked")
                         .font(.plexMono(10))
-                        .foregroundStyle(Color(hex: Palette.berry1))
+                        .foregroundStyle(Theme.accentLight)
                     Text(entry.text)
                         .font(.plexSans(15).weight(.medium))
                         .foregroundStyle(.white)
@@ -442,11 +442,11 @@ private struct EntryView: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color(hex: Palette.berry2))
+                    .foregroundStyle(Theme.accentLight)
                     .padding(.top, 2)
                 Text(entry.text)
                     .font(.plexMono(11))
-                    .foregroundStyle(Color(hex: Palette.inkSoft))
+                    .foregroundStyle(Theme.soft)
                     .lineLimit(4)
                 Spacer(minLength: 40)
             }
@@ -456,7 +456,7 @@ private struct EntryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Button { withAnimation(.spring(duration: 0.3)) { open.toggle() } } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "doc.text.magnifyingglass").foregroundStyle(Color(hex: Palette.berry2))
+                        Image(systemName: "doc.text.magnifyingglass").foregroundStyle(Theme.accentLight)
                         Text(lines.first ?? "Research")
                             .font(.fredoka(16))
                             .foregroundStyle(Color(hex: Palette.ink))
@@ -466,7 +466,7 @@ private struct EntryView: View {
                             .font(.system(size: 12, weight: .heavy))
                             .foregroundStyle(.white)
                             .frame(width: 24, height: 24)
-                            .background(Circle().fill(Color(hex: Palette.berry2)))
+                            .background(Circle().fill(Theme.accentLight))
                     }
                 }
                 .buttonStyle(.plain)
@@ -477,7 +477,7 @@ private struct EntryView: View {
             }
             .padding(14)
             .background(Color(hex: 0xEEF0FF), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color(hex: Palette.berry2), lineWidth: 2))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.accentLight, lineWidth: 2))
             .padding(.leading, 36)
             .padding(.trailing, 80)
         }

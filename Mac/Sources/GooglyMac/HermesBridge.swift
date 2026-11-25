@@ -24,6 +24,8 @@ final class HermesBridge: NSObject {
     var onHermesChange: (() -> Void)?
     /// Tries to tell him a note out loud on the Mac; returns false if he isn't listening there.
     var deliverNote: ((String) -> Bool)?
+    /// Current or most recent meeting notes context for Hermes.
+    var meetingContext: (() -> String?)?
 
     init(server: PhoneServer, host: RealtimeHost, focus: FocusCompanion) {
         self.server = server; self.host = host; self.focus = focus
@@ -159,6 +161,11 @@ final class HermesBridge: NSObject {
         if !recent.isEmpty { lines.append("Recent focus sessions: " + recent.joined(separator: "; ") + ".") }
         if Date().timeIntervalSince(today?.to ?? .distantPast) > 120 { await refreshActivity() }
         if let today { lines.append("ActivityWatch today: " + today.plainText) }
+        if let meeting = meetingContext?(), !meeting.isEmpty {
+            lines.append(meeting)
+        } else {
+            lines.append("Meeting notes & transcripts folder: ~/Documents/Bluey Notes/.")
+        }
         lines.append("Daily journals of what the user worked on (timeline, focus sessions, apps): ~/Documents/Bluey Journal/YYYY-MM-DD.md (today's is refreshed every 10 minutes).")
         lines.append("Full focus history (JSON): ~/Library/Application Support/Googly/focus-history.json. ActivityWatch API: http://localhost:5600/api/0/ (bucket \(ActivityWatch.focusBucket) holds Bluey's focus sessions).")
         return lines.joined(separator: "\n")

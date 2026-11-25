@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import WebKit
 import UniformTypeIdentifiers
 #if canImport(GooglyShared)
 import GooglyShared
@@ -10,7 +11,16 @@ struct ChatTab: View {
     @ObservedObject var model: WorkspaceModel
     @ObservedObject var ui: WorkspaceUI
     var info: HeaderInfo
+    #if os(macOS)
+    @Binding var liveScreen: Bool
+    @State private var showThreadList = true
+    private var selected: UUID? {
+        get { model.selectedWorkspaceThread }
+        nonmutating set { model.selectedWorkspaceThread = newValue }
+    }
+    #else
     @State private var selected: UUID?
+    #endif
     @State private var composingNew = false
     @State private var modelFilter: String?
 
@@ -41,19 +51,86 @@ struct ChatTab: View {
         }
         .onChange(of: ui.composeCount) { _, _ in newChat() }
         #else
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                header
-                threadList
+        GeometryReader { layout in
+            let sidebarBlockedByWidth = liveScreen && layout.size.width < 920
+            let showSidebar = showThreadList && !sidebarBlockedByWidth
+            HSplitView {
+                if showSidebar {
+                    VStack(spacing: 0) {
+                        macSidebarHeader
+                        macSearchBar
+                        threadList
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minWidth: 200, idealWidth: 245, maxWidth: 340, maxHeight: .infinity)
+                    .background(Theme.panel)
+                }
+                ConversationView(model: model, threadID: $model.selectedWorkspaceThread, composeCount: ui.composeCount,
+                                 leadingControls: showSidebar ? nil : AnyView(sidebarToggle(hiddenForWidth: sidebarBlockedByWidth)),
+                                 layoutControls: AnyView(macLayoutControls))
+                    .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+                if liveScreen {
+                    MacHermesScreenPane(model: model, close: { liveScreen = false }, move: model.detachHermesScreen)
+                        .frame(minWidth: 260, idealWidth: 360, maxWidth: 540)
+                }
             }
-            .frame(width: 300)
-            .background(Theme.panel.opacity(0.35))
-            Divider().overlay(Theme.line)
-            ConversationView(model: model, threadID: $selected, composeCount: ui.composeCount)
         }
         .onChange(of: ui.composeCount) { _, _ in newChat() }
         #endif
     }
+
+    #if os(macOS)
+    private func sidebarToggle(hiddenForWidth: Bool = false) -> some View {
+        layoutButton("Chats", symbol: "sidebar.left", selected: showThreadList && !hiddenForWidth) {
+            if hiddenForWidth {
+                showThreadList = true
+                liveScreen = false
+            } else { showThreadList.toggle() }
+        }
+    }
+
+    private var macSidebarHeader: some View {
+        WorkspacePaneHeader(title: "Chats", leading: { sidebarToggle() }, actions: {})
+    }
+
+    private var macSearchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.soft)
+            TextField("Chats suchen", text: $ui.search).textFieldStyle(.plain)
+            Button { ui.composeCount += 1 } label: { Image(systemName: "square.and.pencil") }
+                .help("Neuer Chat").accessibilityLabel("Neuer Chat")
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+    }
+
+    private var macLayoutControls: some View {
+        HStack(spacing: 5) {
+            layoutButton("Live-Bildschirm", symbol: "display", selected: liveScreen || model.hermesScreenDetached) {
+                if liveScreen { liveScreen = false }
+                else { model.openHermesScreen?(selected) }
+            }
+            .overlay(alignment: .topTrailing) {
+                if let thread = model.hermesScreenThread(), model.screenTool(for: thread) != nil {
+                    Circle().fill(Theme.green).frame(width: 6, height: 6).allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    private func layoutButton(_ title: String, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .frame(width: 29, height: 28)
+                .background(selected ? Theme.raised : .clear, in: RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+    #endif
 
     private func newChat() {
         ui.endSearch()
@@ -111,8 +188,12 @@ struct ChatTab: View {
                     LazyVStack(spacing: 0) {
                         ForEach(threads) { thread in
                             Button { selected = thread.id; composingNew = false } label: {
+                                #if os(macOS)
+                                macThreadRow(thread)
+                                #else
                                 ThreadRow(thread: thread, modelName: model.models.first { $0.id == thread.model }?.name ?? thread.model,
                                           selected: selected == thread.id)
+                                #endif
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
@@ -125,6 +206,29 @@ struct ChatTab: View {
             }
         }
     }
+
+    #if os(macOS)
+    private func macThreadRow(_ thread: ChatThread) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                if thread.model == "hermes" { HermesModelIcon(size: 14) }
+                Text(thread.hermesOptions?.model ?? model.models.first { $0.id == thread.model }?.name ?? thread.model)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if thread.isStreaming { ProgressView().controlSize(.mini) }
+                else { Text(ThreadRow.age(thread.updatedAt)) }
+            }
+            .font(.caption)
+            .foregroundStyle(Theme.soft)
+            Text(thread.title).font(.system(size: 14, weight: .medium)).lineLimit(2)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(selected == thread.id ? Theme.raised : .clear, in: RoundedRectangle(cornerRadius: 9))
+        .contentShape(Rectangle())
+        .padding(.horizontal, 6)
+    }
+    #endif
 
     private func delete(_ thread: ChatThread) {
         if selected == thread.id { selected = nil }
@@ -151,8 +255,9 @@ private struct ThreadRow: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 6) {
-                        Image(systemName: "cpu").font(.system(size: 12))
-                        Text(modelName)
+                        if thread.model == "hermes" { HermesModelIcon(size: 14) }
+                        else { Image(systemName: "cpu").font(.system(size: 12)) }
+                        Text(thread.hermesOptions?.model ?? modelName)
                         if thread.webSearch { Image(systemName: "globe").font(.system(size: 12)) }
                         if thread.messages.contains(where: { !$0.attachments.isEmpty }) { Image(systemName: "paperclip").font(.system(size: 12)) }
                     }
@@ -195,22 +300,47 @@ struct ConversationView: View {
     @Binding var threadID: UUID?
     var focusOnAppear = false
     var composeCount = 0
-    @State private var draft = ""
-    @State private var attachments: [ChatAttachment] = []
-    @State private var uploading = 0
-    @State private var sending = false
-    @State private var error: String?
-    @State private var chosenModel: String?
-    @State private var webSearch = false
+    var leadingControls: AnyView?
+    var layoutControls: AnyView?
+    #if os(macOS)
+    @StateObject private var dictation = MacChatDictation()
+    #endif
+    @State private var showModelPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var importing = false
     @FocusState private var composerFocused: Bool
 
     private var thread: ChatThread? { model.thread(threadID) }
-    private var currentModel: String { chosenModel ?? thread?.model ?? model.defaultModel }
+    private var composerDraft: WorkspaceChatDraft { model.chatDrafts[threadID] ?? .init() }
+    private var draftBinding: Binding<String> {
+        let target = threadID
+        return Binding(
+            get: { model.chatDrafts[target]?.text ?? "" },
+            set: { model.chatDrafts[target, default: .init()].text = $0 }
+        )
+    }
+    private var currentModel: String { composerDraft.model ?? thread?.model ?? model.defaultModel }
+
+    private var hermesOptions: HermesChatOptions { composerDraft.hermesOptions ?? thread?.hermesOptions ?? HermesChatOptions() }
+    private var webSearch: Bool { composerDraft.webSearch ?? thread?.webSearch ?? false }
+    private var currentModelLabel: String {
+        if currentModel == "hermes" { return hermesOptions.model ?? "Hermes" }
+        return model.models.first { $0.id == currentModel }?.name ?? currentModel
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            #if os(macOS)
+            WorkspacePaneHeader(title: thread?.title ?? "Neuer Chat", leading: {
+                leadingControls
+                if currentModel == "hermes" { HermesModelIcon(size: 16) }
+                else { MiniBluey().frame(width: 18, height: 16) }
+            }, actions: {
+                Text(currentModel == "hermes" ? "Hermes" : "Bluey")
+                    .font(.caption).foregroundStyle(Theme.soft)
+                layoutControls
+            })
+            #endif
             messages
             composer
         }
@@ -219,6 +349,12 @@ struct ConversationView: View {
         .navigationTitle(thread?.title ?? "Neuer Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let open = model.openHermesScreen {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { open(threadID) } label: { Image(systemName: "display") }
+                        .accessibilityLabel("Hermes Live-Bildschirm öffnen")
+                }
+            }
             if let startCall = model.startCall {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { startCall(threadID) } label: { Image(systemName: "phone") }
@@ -227,26 +363,42 @@ struct ConversationView: View {
             }
         }
         #endif
-        .onChange(of: threadID) { _, _ in
-            chosenModel = nil
-            webSearch = thread?.webSearch ?? false
-            error = nil
+        #if os(macOS)
+        .sheet(isPresented: $showModelPicker) { modelPicker }
+        .onDisappear { dictation.stop() }
+        #else
+        .sheet(isPresented: $showModelPicker) {
+            modelPicker.presentationDetents([.large])
         }
+        #endif
+        #if os(macOS)
+        .onChange(of: threadID) { _, _ in dictation.stop() }
+        #endif
         .onAppear {
-            webSearch = thread?.webSearch ?? false
             if focusOnAppear { composerFocused = true }
         }
-        .onChange(of: composeCount) { _, _ in composerFocused = true }
+        .task(id: composeCount) {
+            guard composeCount > 0 else { return }
+            composerFocused = false
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            composerFocused = true
+        }
         .onChange(of: photoItems) { _, items in
             guard !items.isEmpty else { return }
             photoItems = []
-            for item in items { Task { await importPhoto(item) } }
+            let target = threadID
+            for item in items { Task { await importPhoto(item, target: target) } }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { for url in urls { Task { await importFile(url) } } }
+            let target = threadID
+            if case .success(let urls) = result {
+                for url in urls { Task { await importFile(url, target: target) } }
+            }
         }
         .onDrop(of: [.fileURL, .image], isTargeted: nil) { providers in
-            for provider in providers { Task { await importProvider(provider) } }
+            let target = threadID
+            for provider in providers { Task { await importProvider(provider, target: target) } }
             return true
         }
     }
@@ -259,6 +411,9 @@ struct ConversationView: View {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if let thread, !thread.messages.isEmpty {
                         ForEach(thread.messages) { message in
+                            if let tool = model.liveTools[message.id], let open = model.openHermesScreen {
+                                HermesLiveToolRow(tool: tool) { open(threadID) }
+                            }
                             MessageBubble(model: model, message: message).id(message.id)
                         }
                     } else {
@@ -266,6 +421,13 @@ struct ConversationView: View {
                                         subtitle: model.connected ? "Frag mich was, oder häng ein Bild, PDF oder eine Datei an."
                                                                   : "Zum Chatten brauche ich die Verbindung zu deinem Mac.")
                             .frame(minHeight: 360)
+                    }
+                    if let threadID, let respond = model.answerHermesApproval {
+                        ForEach(model.hermesApprovals.filter { $0.threadID == threadID }) { approval in
+                            WorkspaceHermesPromptCard(prompt: approval.prompt) { answer in
+                                try await respond(approval, answer)
+                            }
+                        }
                     }
                     Color.clear.frame(height: 4).id("bottom")
                 }
@@ -277,6 +439,9 @@ struct ConversationView: View {
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: thread?.messages.count) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
             .onChange(of: model.streaming) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+            .onChange(of: model.hermesApprovals.filter { $0.threadID == threadID }) { _, approvals in
+                if !approvals.isEmpty { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
             .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
         }
     }
@@ -285,20 +450,22 @@ struct ConversationView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let error {
+            if let error = composerDraft.error {
                 Text(error).font(.plexSans(12)).foregroundStyle(Theme.peach)
             }
-            if !attachments.isEmpty || uploading > 0 {
+            if !composerDraft.attachments.isEmpty || composerDraft.uploads > 0 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(attachments) { attachment in
-                            AttachmentChip(attachment: attachment) { attachments.removeAll { $0.id == attachment.id } }
+                        ForEach(composerDraft.attachments) { attachment in
+                            AttachmentChip(attachment: attachment) {
+                                model.chatDrafts[threadID, default: .init()].attachments.removeAll { $0.id == attachment.id }
+                            }
                         }
-                        if uploading > 0 { ProgressView().controlSize(.small).padding(.horizontal, 8) }
+                        if composerDraft.uploads > 0 { ProgressView().controlSize(.small).padding(.horizontal, 8) }
                     }
                 }
             }
-            TextField("Nachricht an Bluey…", text: $draft, axis: .vertical)
+            TextField(currentModel == "hermes" ? "Nachricht an Hermes…" : "Nachricht an Bluey…", text: draftBinding, axis: .vertical)
                 .lineLimit(1...8)
                 .font(.plexSans(15))
                 .textFieldStyle(.plain)
@@ -321,55 +488,86 @@ struct ConversationView: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.white)
                         .frame(width: 36, height: 36)
-                        .glassCircle()
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
                 .fixedSize()
                 .accessibilityLabel("Anhang hinzufügen")
 
-                Menu {
-                    ForEach(model.models) { option in
-                        Button {
-                            chosenModel = option.id
-                            model.setModel(option.id, for: thread)
-                        } label: {
-                            if option.id == currentModel { Label(option.name, systemImage: "checkmark") } else { Text(option.name) }
+                Spacer(minLength: 0)
+
+                Button { showModelPicker = true } label: {
+                    HStack(spacing: 5) {
+                        if currentModel == "hermes" { HermesModelIcon(size: 16) }
+                        else { ProviderModelIcon(hermes: false, size: 16) }
+                        Text(currentModelLabel).lineLimit(1)
+                        if currentModel == "hermes", let thinking = hermesOptions.thinking {
+                            Text(thinking.title).foregroundStyle(.secondary).lineLimit(1)
                         }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "cpu")
-                        Text(model.models.first { $0.id == currentModel }?.name ?? currentModel).lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                        Image(systemName: "chevron.down").font(.system(size: 9))
                     }
                     .font(.plexSans(12))
                     .foregroundStyle(.white.opacity(0.85))
                     .padding(.horizontal, 12)
-                    .frame(height: 36)
-                    .glassCapsule()
+                    #if os(iOS)
+                    .frame(minHeight: 44)
+                    #else
+                    .frame(minHeight: 30)
+                    #endif
+                    .background(Theme.raised, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.line))
                 }
-                .menuStyle(.button)
                 .buttonStyle(.plain)
-                .accessibilityLabel("Modell: \(model.models.first { $0.id == currentModel }?.name ?? currentModel)")
+                .accessibilityLabel("Modell: \(currentModelLabel)")
 
-                Button { webSearch.toggle() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "globe")
-                        Text("Web")
+                if currentModel != "hermes" {
+                    Button { model.chatDrafts[threadID, default: .init()].webSearch = !webSearch } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "globe")
+                            Text("Web")
+                        }
+                        .font(.plexSans(12))
+                        .foregroundStyle(webSearch ? .white : .white.opacity(0.85))
+                        .padding(.horizontal, 12)
+                        .frame(height: 36)
+                        .contentShape(Capsule())
                     }
-                    .font(.plexSans(12))
-                    .foregroundStyle(webSearch ? .white : .white.opacity(0.85))
-                    .padding(.horizontal, 12)
-                    .frame(height: 36)
-                    .contentShape(Capsule())
+                    .buttonStyle(.plain)
+                    .glassCapsule(tint: webSearch ? Theme.blue.opacity(0.6) : nil)
+                    .accessibilityLabel("Websuche")
+                    .fixedSize()
+                }
+
+                #if os(macOS)
+                Button {
+                    if dictation.listening || dictation.starting {
+                        dictation.stop()
+                    } else {
+                        let target = threadID
+                        let draft = composerDraft.text
+                        let prefix = draft.isEmpty || draft.hasSuffix(" ") ? draft : draft + " "
+                        Task {
+                            await dictation.start(onText: { model.chatDrafts[target, default: .init()].text = prefix + $0 },
+                                                  onError: { model.chatDrafts[target, default: .init()].error = $0 })
+                        }
+                    }
+                } label: {
+                    Image(systemName: dictation.listening ? "mic.fill" : "mic")
+                        .foregroundStyle(dictation.listening ? Theme.red : Theme.soft)
+                        .frame(width: 30, height: 34)
                 }
                 .buttonStyle(.plain)
-                .glassCapsule(tint: webSearch ? Theme.blue.opacity(0.6) : nil)
-                .accessibilityLabel("Websuche")
-                .fixedSize()
-
-                Spacer(minLength: 0)
+                .help(dictation.listening ? "Diktat beenden" : "Nachricht diktieren")
+                .accessibilityLabel(dictation.listening ? "Diktat beenden" : "Nachricht diktieren")
+                #else
+                if let startCall = model.startCall {
+                    Button { startCall(threadID) } label: {
+                        Image(systemName: "mic").frame(width: 30, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Sprachanruf starten")
+                }
+                #endif
 
                 if thread?.isStreaming == true {
                     Button { if let id = threadID { model.stop(threadID: id) } } label: {
@@ -380,12 +578,12 @@ struct ConversationView: View {
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .glassCircle(tint: Theme.red.opacity(0.8))
+                    .background(Theme.red, in: Circle())
                     .accessibilityLabel("Antwort stoppen")
                 } else {
                     Button(action: send) {
                         Group {
-                            if sending { ProgressView().controlSize(.small).tint(.white) }
+                            if composerDraft.sending { ProgressView().controlSize(.small).tint(.white) }
                             else { Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold)) }
                         }
                         .foregroundStyle(.white)
@@ -394,81 +592,122 @@ struct ConversationView: View {
                         .opacity(canSend ? 1 : 0.45)
                     }
                     .buttonStyle(.plain)
-                    .glassCircle(tint: canSend ? Theme.blue.opacity(0.8) : nil)
+                    .background(canSend ? Theme.blue : Color.white.opacity(0.08), in: Circle())
                     .disabled(!canSend)
                     .keyboardShortcut(.return, modifiers: .command)
                     .accessibilityLabel("Senden")
                 }
             }
         }
-        .padding(12)
-        .glass(in: RoundedRectangle(cornerRadius: 26, style: .continuous), interactive: false)
+        .padding(14)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 17))
+        .overlay {
+            RoundedRectangle(cornerRadius: 17).strokeBorder(Color.white.opacity(0.10))
+                .allowsHitTesting(false)
+        }
         .padding(.horizontal, 12)
         .padding(.bottom, 10)
         .frame(maxWidth: 840)
         .frame(maxWidth: .infinity)
     }
 
+    private var modelPicker: some View {
+        ChatModelPicker(
+            blueyModels: model.models.filter { $0.id != "hermes" },
+            activeModel: Binding(get: { currentModel }, set: { id in
+                model.chatDrafts[threadID, default: .init()].model = id
+                model.setModel(id, for: thread)
+            }),
+            options: Binding(get: { hermesOptions }, set: { model.chatDrafts[threadID, default: .init()].hermesOptions = $0 }),
+            loadHermesModels: model.loadHermesModels
+        )
+    }
+
     private var canSend: Bool {
-        !sending && uploading == 0 && thread?.isStreaming != true &&
-            (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
+        let draft = composerDraft
+        return !draft.sending && draft.uploads == 0 && thread?.isStreaming != true &&
+            (!draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draft.attachments.isEmpty)
     }
 
     private func send() {
         guard canSend else { return }
-        let text = draft, files = attachments
-        sending = true; error = nil
+        #if os(macOS)
+        dictation.stop()
+        #endif
+        let target = threadID
+        let text = composerDraft.text
+        let files = composerDraft.attachments
+        let selectedModel = currentModel
+        let searchingWeb = webSearch
+        let options = selectedModel == "hermes" ? hermesOptions : nil
+        model.chatDrafts[target, default: .init()].sending = true
+        model.chatDrafts[target, default: .init()].error = nil
         Task {
+            defer { model.chatDrafts[target, default: .init()].sending = false }
             do {
-                let id = try await model.send(threadID: threadID, text: text, attachments: files, model: currentModel, webSearch: webSearch)
-                draft = ""; attachments = []
-                threadID = id
+                let id = try await model.send(threadID: target, text: text, attachments: files, model: selectedModel,
+                                              webSearch: searchingWeb, hermesOptions: options)
+                if model.chatDrafts[target]?.text == text { model.chatDrafts[target]?.text = "" }
+                let sentFiles = Set(files.map(\.id))
+                model.chatDrafts[target]?.attachments.removeAll { sentFiles.contains($0.id) }
+                if target == nil, model.chatDrafts[nil]?.text.isEmpty == true, model.chatDrafts[nil]?.attachments.isEmpty == true {
+                    model.chatDrafts[nil]?.model = nil
+                    model.chatDrafts[nil]?.webSearch = nil
+                    model.chatDrafts[nil]?.hermesOptions = nil
+                }
+                if threadID == target, target == nil { threadID = id }
             } catch {
-                self.error = error.localizedDescription
+                model.chatDrafts[target, default: .init()].error = error.localizedDescription
             }
-            sending = false
         }
     }
 
     // MARK: Attachments
 
-    private func add(_ data: Data, name: String, mime: String) async {
-        uploading += 1
-        defer { uploading -= 1 }
+    private func add(_ data: Data, name: String, mime: String, target: UUID?) async {
+        model.chatDrafts[target, default: .init()].uploads += 1
+        defer { model.chatDrafts[target, default: .init()].uploads -= 1 }
         do {
-            attachments.append(try await model.upload(data, name: name, mime: mime))
-            error = nil
+            let attachment = try await model.upload(data, name: name, mime: mime)
+            model.chatDrafts[target, default: .init()].attachments.append(attachment)
+            model.chatDrafts[target]?.error = nil
         } catch {
-            self.error = error.localizedDescription
+            model.chatDrafts[target]?.error = error.localizedDescription
         }
     }
 
-    private func importPhoto(_ item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self) else { error = "Das Foto konnte nicht geladen werden."; return }
+    private func importPhoto(_ item: PhotosPickerItem, target: UUID?) async {
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            model.chatDrafts[target, default: .init()].error = "Das Foto konnte nicht geladen werden."
+            return
+        }
         let type = item.supportedContentTypes.first
         let ext = type?.preferredFilenameExtension ?? "jpg"
-        await add(data, name: "Foto.\(ext)", mime: type?.preferredMIMEType ?? "image/jpeg")
+        await add(data, name: "Foto.\(ext)", mime: type?.preferredMIMEType ?? "image/jpeg", target: target)
     }
 
-    private func importFile(_ url: URL) async {
+    private func importFile(_ url: URL, target: UUID?) async {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { error = "„\(url.lastPathComponent)“ konnte nicht gelesen werden."; return }
+        guard let data = try? Data(contentsOf: url) else {
+            model.chatDrafts[target, default: .init()].error = "„\(url.lastPathComponent)“ konnte nicht gelesen werden."
+            return
+        }
         let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? ChatAttachment.mime(forName: url.lastPathComponent)
-        await add(data, name: url.lastPathComponent, mime: mime)
+        await add(data, name: url.lastPathComponent, mime: mime, target: target)
     }
 
-    private func importProvider(_ provider: NSItemProvider) async {
+    private func importProvider(_ provider: NSItemProvider, target: UUID?) async {
         if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
             let url: URL? = await withCheckedContinuation { done in
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in done.resume(returning: url) }
             }
-            if let url { await importFile(url) }
+            if let url { await importFile(url, target: target) }
         } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
             let data: Data? = await withCheckedContinuation { done in
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in done.resume(returning: data) }
             }
-            if let data { await add(data, name: "Bild.png", mime: "image/png") }
+            if let data { await add(data, name: "Bild.png", mime: "image/png", target: target) }
         }
     }
 }
@@ -651,4 +890,450 @@ struct MarkdownText: View {
         let joined = lines.joined(separator: "\n")
         return (try? AttributedString(markdown: joined, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(joined)
     }
+}
+
+/// Keeps the provider, model and thinking settings together in Bluey's model menu.
+struct ChatModelPicker: View {
+    var blueyModels: [ChatModelInfo] = []
+    @Binding var activeModel: String
+    @Binding var options: HermesChatOptions
+    var loadHermesModels: (() async throws -> HermesModelCatalog)?
+    @State private var showHermes = false
+    @State private var catalog: HermesModelCatalog?
+    @State private var search = ""
+    @State private var loading = false
+    @State private var problem: String?
+    @Environment(\.dismiss) private var dismiss
+
+    private var canChooseHermes: Bool { loadHermesModels != nil }
+    private var supportsThinking: Bool {
+        guard let model = options.model ?? catalog?.model,
+              let provider = options.provider ?? catalog?.provider else { return false }
+        return catalog?.providers.first { $0.slug == provider }?.capabilities?[model]?.reasoning == true
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            #if os(iOS)
+            if !blueyModels.isEmpty && canChooseHermes {
+                HStack(spacing: 8) {
+                    providerButton("OpenAI", hermes: false)
+                    providerButton("Hermes", hermes: true)
+                    Spacer(minLength: 0)
+                }
+                .padding([.top, .horizontal], 12)
+            }
+            #endif
+            HStack(spacing: 0) {
+                #if os(macOS)
+                if !blueyModels.isEmpty && canChooseHermes {
+                    VStack(spacing: 8) {
+                        providerButton("OpenAI", hermes: false)
+                        providerButton("Hermes", hermes: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(8)
+                    Divider().overlay(Theme.line)
+                }
+                #endif
+                modelList
+                #if os(macOS)
+                if showHermes {
+                    Divider().overlay(Theme.line)
+                    thinkingColumn.frame(width: 170)
+                }
+                #endif
+            }
+            Divider().overlay(Theme.line)
+            HStack {
+                Spacer()
+                Button("Fertig") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: Palette.berry3))
+                    #if os(iOS)
+                    .controlSize(.large)
+                    #else
+                    .keyboardShortcut(.cancelAction)
+                    #endif
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            .background(Theme.raised)
+        }
+        .background(Theme.panel)
+        .preferredColorScheme(.dark)
+        #if os(macOS)
+        .frame(width: 620, height: 390)
+        #else
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #endif
+        .onAppear { showHermes = canChooseHermes && (activeModel == "hermes" || blueyModels.isEmpty) }
+        .task(id: showHermes) {
+            if showHermes && catalog == nil { await loadCatalog() }
+        }
+    }
+
+    private var modelList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Theme.soft)
+                TextField("Modelle suchen", text: $search).textFieldStyle(.plain)
+            }
+            .padding(10)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 8))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    if showHermes { hermesModels }
+                    else {
+                        ForEach(blueyModels.filter { matches($0.name) }) { entry in
+                            row(entry.name, selected: entry.id == activeModel, brand: false) { activeModel = entry.id }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            #if os(iOS)
+            if showHermes && supportsThinking {
+                Divider().overlay(Theme.line)
+                LabeledContent("Denkaufwand") {
+                    Picker("Denkaufwand", selection: $options.thinking) {
+                        Text("Standard").tag(HermesChatOptions.Thinking?.none)
+                        ForEach(HermesChatOptions.Thinking.allCases, id: \.self) { value in
+                            Text(value.title).tag(Optional(value))
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+                .frame(minHeight: 44)
+                .onChange(of: options.thinking) { _, _ in activeModel = "hermes" }
+            }
+            #endif
+        }
+        .padding(12)
+    }
+
+    #if os(macOS)
+    private var thinkingColumn: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Denkaufwand").font(.headline)
+            Text(options.model ?? catalog?.model ?? "Hermes")
+                .font(.caption).foregroundStyle(Theme.soft)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider().overlay(Theme.line)
+            if supportsThinking {
+                ScrollView {
+                    VStack(spacing: 3) {
+                        thinkingRow("Standard", value: nil)
+                        ForEach(HermesChatOptions.Thinking.allCases, id: \.self) { value in
+                            thinkingRow(value.title, value: value)
+                        }
+                    }
+                }
+            } else if catalog != nil {
+                Text("Für dieses Modell nicht verfügbar.").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func thinkingRow(_ title: String, value: HermesChatOptions.Thinking?) -> some View {
+        row(title, selected: options.thinking == value) {
+            options.thinking = value
+            activeModel = "hermes"
+        }
+    }
+    #endif
+
+    @ViewBuilder private var hermesModels: some View {
+        if search.isEmpty {
+            let name = catalog?.model.map { "Hermes-Standard · \($0)" } ?? "Hermes-Standard"
+            row(name, selected: activeModel == "hermes" && options.model == nil, brand: true) {
+                let effort = options.thinking
+                options = HermesChatOptions(thinking: effort)
+                if !supportsThinking { options.thinking = nil }
+                activeModel = "hermes"
+            }
+        }
+        if loading { ProgressView().padding(8) }
+        if let problem {
+            Text(problem).font(.caption).foregroundStyle(.secondary)
+            Button("Erneut laden") { Task { await loadCatalog() } }
+        }
+        ForEach(catalog?.providers ?? []) { provider in
+            let matches = provider.models.filter { self.matches($0) }
+            if !matches.isEmpty {
+                Text(provider.name).font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+                ForEach(matches, id: \.self) { id in
+                    row(id, selected: activeModel == "hermes" && options.provider == provider.slug && options.model == id,
+                        brand: provider.slug.hasPrefix("openai") ? false : nil) {
+                        let thinking = provider.capabilities?[id]?.reasoning == true ? options.thinking : nil
+                        options = HermesChatOptions(provider: provider.slug, model: id, thinking: thinking)
+                        activeModel = "hermes"
+                    }
+                }
+            }
+        }
+    }
+
+    private func matches(_ name: String) -> Bool {
+        search.isEmpty || name.localizedCaseInsensitiveContains(search)
+    }
+
+    private func providerButton(_ title: String, hermes: Bool) -> some View {
+        Button {
+            search = ""
+            showHermes = hermes
+        } label: {
+            VStack(spacing: 3) {
+                ProviderModelIcon(hermes: hermes, size: 23)
+                Text(title).font(.caption2)
+            }
+            .frame(width: 55, height: 46)
+            .background(showHermes == hermes ? Theme.cardStrong : .clear, in: RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(showHermes == hermes ? .isSelected : [])
+    }
+
+    private func row(_ title: String, selected: Bool, brand: Bool? = nil, choose: @escaping () -> Void) -> some View {
+        Button(action: choose) {
+            HStack(spacing: 8) {
+                if let brand { ProviderModelIcon(hermes: brand, size: 17) }
+                Text(title).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if selected { Image(systemName: "checkmark").foregroundStyle(Theme.accentLight) }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            #if os(iOS)
+            .frame(minHeight: 44)
+            #endif
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? Theme.cardStrong : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        #if os(macOS)
+        .help(title)
+        #endif
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func loadCatalog() async {
+        guard let loadHermesModels else { return }
+        loading = true
+        problem = nil
+        defer { loading = false }
+        do { catalog = try await loadHermesModels() }
+        catch { if !Task.isCancelled { problem = error.localizedDescription } }
+    }
+}
+
+struct HermesLiveToolRow: View {
+    let tool: HermesLiveTool
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 8) {
+                Image(systemName: tool.symbol)
+                Text(tool.title).fontWeight(.medium)
+                ProgressView().controlSize(.mini)
+                Spacer(minLength: 8)
+                Text("Live ansehen")
+                Image(systemName: "arrow.up.right")
+            }
+            .font(.caption)
+            .padding(10)
+            .background(Theme.cardStrong, in: RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct HermesModelIcon: View {
+    let size: CGFloat
+    var body: some View { ProviderModelIcon(hermes: true, size: size) }
+}
+
+private struct ProviderModelIcon: View {
+    let hermes: Bool
+    let size: CGFloat
+
+    var body: some View {
+        let name = hermes ? "HermesModelIcon" : "OpenAIModelIcon"
+        Group {
+            #if os(macOS)
+            if let url = Bundle.main.url(forResource: name, withExtension: "png"),
+               let icon = NSImage(contentsOf: url) {
+                Image(nsImage: icon).resizable().scaledToFit()
+            } else { fallback }
+            #else
+            if let url = Bundle.main.url(forResource: name, withExtension: "png"),
+               let icon = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: icon).resizable().scaledToFit()
+            } else { fallback }
+            #endif
+        }
+        .frame(width: size, height: size)
+        .clipShape(.rect(cornerRadius: hermes ? size * 0.17 : 0))
+        .accessibilityHidden(true)
+    }
+
+    private var fallback: some View {
+        Image(systemName: hermes ? "bird" : "cpu").font(.system(size: size))
+    }
+}
+
+/// Styles the Hub viewer in the app while preserving its connection and control logic.
+enum HermesViewerPresentation {
+    static func apply(to configuration: WKWebViewConfiguration) {
+        #if os(iOS)
+        let touchRules = "header button, form button, input { min-height: 44px; }"
+        #else
+        let touchRules = ""
+        #endif
+        let source = """
+            const display = document.querySelector('#display');
+            const controls = document.querySelector('header');
+            if (display && controls) {
+                document.body.insertBefore(display, controls);
+                document.documentElement.lang = 'de';
+                document.querySelector('#take').textContent = 'Übernehmen';
+                document.querySelector('#release').textContent = 'Zurückgeben';
+                document.querySelector('#text').placeholder = 'Text am entfernten Computer';
+                document.querySelector('#keyboard button[type=submit]').textContent = 'Eingeben';
+                const status = document.querySelector('#status');
+                const german = {
+                    'Connecting…': 'Verbindung wird aufgebaut …',
+                    'Watching Hermes': 'Zuschauen',
+                    'You have control': 'Du steuerst',
+                    'Control was taken in another viewer. Reconnect to watch.': 'Ein anderes Fenster steuert. Verbinde dich erneut.',
+                    'Disconnected. Tap Reconnect to open a new stream.': 'Getrennt. Verbinde dich erneut.',
+                    "Couldn't connect to Hermes Bot Desktop.": 'Der Hermes-Desktop konnte nicht verbunden werden.',
+                    'Hermes refused the display request.': 'Hermes hat die Bildschirmfreigabe abgelehnt.',
+                    'Hermes dashboard token file is empty.': 'Die Anmeldedatei für das Hermes-Dashboard ist leer.'
+                };
+                const translate = () => {
+                    if (german[status.textContent]) status.textContent = german[status.textContent];
+                };
+                new MutationObserver(translate).observe(status, {childList:true});
+                translate();
+                const style = document.createElement('style');
+                style.textContent = `
+                    :root { background: #\(String(format: "%06X", Palette.workspaceCanvas)); color: #\(String(format: "%06X", Palette.workspaceText)); font: 13px system-ui; }
+                    body { box-sizing: border-box; padding: 10px 12px; gap: 8px; }
+                    main { border: 1px solid #\(String(format: "%06X", Palette.workspaceEdge)); border-radius: 12px; background: #\(String(format: "%06X", Palette.workspaceRaised)); }
+                    header, form { background: none; padding: 0; flex-wrap: wrap; }
+                    header span { color: #\(String(format: "%06X", Palette.workspaceMuted)); font-size: 12px; }
+                    button, input { background: #\(String(format: "%06X", Palette.workspaceRaised)); border-color: #\(String(format: "%06X", Palette.workspaceEdge)); padding: 6px 9px; }
+                    header button:hover:not(:disabled) { color: white; text-decoration: underline; }
+                    #release:disabled, header:has(#release:not(:disabled)) #take { display: none; }
+                    #release:not(:disabled) { background: #264037; }
+                    \(touchRules)
+                `;
+                document.head.appendChild(style);
+            }
+            """
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true
+        ))
+    }
+}
+
+struct WorkspaceHermesActivity: View {
+    let title: String
+    var tool: HermesLiveTool?
+    var stop: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: tool?.symbol ?? "waveform")
+                .foregroundStyle(Theme.accentLight)
+            Text(title)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+            if let stop {
+                Button("Stoppen", systemImage: "stop.circle", action: stop)
+                    .buttonStyle(.plain)
+                    .tint(Theme.red)
+                    .foregroundStyle(Theme.red)
+                    #if os(iOS)
+                    .frame(minHeight: 44)
+                    #endif
+            }
+        }
+        .font(.plexSans(13))
+        .foregroundStyle(Theme.text)
+    }
+}
+
+struct WorkspaceHermesPromptCard: View {
+    let prompt: HermesPrompt
+    let submit: (String) async throws -> Void
+    @State private var text = ""
+    @State private var sending = false
+    @State private var sent = false
+    @State private var issue: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Label(prompt.kind == .approval ? "Freigabe erforderlich" : "Hermes hat eine Frage",
+                  systemImage: prompt.kind == .approval ? "exclamationmark.shield" : "questionmark.bubble")
+                .foregroundStyle(Theme.yellow)
+            Text(prompt.text).textSelection(.enabled)
+            if let detail = prompt.detail, !detail.isEmpty, detail != prompt.text {
+                Text(detail).font(.caption.monospaced()).foregroundStyle(Theme.soft)
+                    .textSelection(.enabled)
+            }
+            if prompt.kind == .clarify {
+                TextField("Antwort", text: $text).textFieldStyle(.roundedBorder)
+                    .onSubmit { send(text) }
+                Button("Antwort senden") { send(text) }
+                    .buttonStyle(.bordered)
+                    #if os(iOS)
+                    .controlSize(.large)
+                    #endif
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            if !prompt.choices.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 6) {
+                        ForEach(prompt.choices, id: \.self) { choice in
+                            Button(prompt.kind == .approval ? HermesPrompt.choiceTitle(choice) : choice) { send(choice) }
+                                .buttonStyle(.bordered)
+                                #if os(iOS)
+                                .controlSize(.large)
+                                #endif
+                                .tint(prompt.kind == .approval && choice == "deny" ? Theme.red : Theme.accentLight)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+            if let issue { Text(issue).foregroundStyle(Theme.red) }
+            if sent { Text("An Hermes gesendet").foregroundStyle(Theme.soft) }
+        }
+        .font(.plexSans(13))
+        .disabled(sending || sent)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func send(_ choice: String) {
+        guard !sending, !sent, !choice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        sending = true
+        issue = nil
+        Task {
+            defer { sending = false }
+            do { try await submit(choice); sent = true }
+            catch { issue = error.localizedDescription }
+        }
+    }
+
+
 }

@@ -1,0 +1,4 @@
+{
+  "private": true,
+  "dependencies": { "@novnc/novnc": "1.7.0" }
+}

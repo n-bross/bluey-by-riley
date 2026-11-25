@@ -12,6 +12,7 @@
 		0E02B38E4A5A909A93BA31C5 /* OFL-IBMPlex.txt in Resources */ = {isa = PBXBuildFile; fileRef = 1249C703A2D40793CA70D00E /* OFL-IBMPlex.txt */; };
 		0F5614BE9A55A8498E40F5F1 /* IBMPlexMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1C8AB3F441CA03CDA07FAE72 /* IBMPlexMono-Medium.ttf */; };
 		13A96B95548DB6038ABE2137 /* ChatTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039AE65B82D4536454878ECE /* ChatTab.swift */; };
+		182E70D83110BDEF9F059FC6 /* HermesModelIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 2E4AE770010F8F2FEC6BBEAA /* HermesModelIcon.png */; };
 		18AC80FBFB3FBC953051B412 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF9983CC6F68611E8657F5E /* Glass.swift */; };
 		1A5A63320A44D0CA52E3A40A /* HubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 382567E0278FD16B65498AEA /* HubClient.swift */; };
 		1C5AC59D8D28F3A0B368D414 /* BlueyWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -20,10 +21,12 @@
 		2BE71ADC1B38EB1C0C7C8BD1 /* Pomodoro.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB8136F2C46D30D8774E3EC /* Pomodoro.swift */; };
 		31C85F05EF22F9FFEFCBE8B5 /* BlobShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226F160BB3B194D1F5E50164 /* BlobShape.swift */; };
 		415A152674D5DB1F53408376 /* NotesSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B13603392444280D432F5CD7 /* NotesSync.swift */; };
+		484110E2A98A8E7EEB3B175E /* InkCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ECC9B7BCB496AA746FCDA0F /* InkCanvas.swift */; };
 		48C0D3B804C683C8ABD27987 /* BlueyWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D965803A61F4541BBDCE1FED /* BlueyWidgets.swift */; };
 		4AEEC850D83F7A1245CB4706 /* DMSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 70DAEA7A2217022DF5D0BB22 /* DMSans-Bold.ttf */; };
 		6087379B5787BCFDD5069177 /* WorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEC599958FAAE72C005CF36 /* WorkspaceModel.swift */; };
 		63254595DAF92EDD1EEF4391 /* keramik-avatar.js in Resources */ = {isa = PBXBuildFile; fileRef = 1F05D570EC65415B1C06723D /* keramik-avatar.js */; };
+		6543EC80BA258D9404BA3804 /* HuionProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B479DCF33FBDDE11375B9560 /* HuionProtocol.swift */; };
 		67934D847C9B182DB08E8763 /* BlueyAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 475EE52E8251FB9A91119BA4 /* BlueyAudio.swift */; };
 		68D8CE32E101AC9E9F9650A4 /* WorkspaceRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA033C0808E6AC5ABDF16475 /* WorkspaceRootView.swift */; };
 		68F797C6A1D3EC7A83674C2A /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A762C0174AFF849BAD1A700 /* PairingView.swift */; };
@@ -49,9 +52,11 @@
 		AEC263BAA6F682C7084CF42D /* HubThreads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BA55D21847413604146489 /* HubThreads.swift */; };
 		AF36CBC0F9F65043C0E3FBB5 /* KeramikAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DAB077A345B8E38071C921 /* KeramikAvatar.swift */; };
 		B044534E32B5458A52510C8A /* ChunkRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FCEA6C5E452C1B0E9BBDC1 /* ChunkRecorder.swift */; };
+		B16332FA67C1F37A75836AAC /* InkCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01BACC4EC6FEA0BBE578FF24 /* InkCanvasView.swift */; };
 		B1C9F242A535AE4816E8E12B /* BlueyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F945FC02B251672C3E6D50 /* BlueyAvatar.swift */; };
 		B7776B449323D43A0746B903 /* DMSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C1CDABEF6D96D636BB56B08F /* DMSans-Medium.ttf */; };
 		B7F0853D97ECC4C28D0F6986 /* FocusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABAEED7339E96003AE49BEC7 /* FocusViews.swift */; };
+		C2C15D41CB6913D86FA26DFB /* OpenAIModelIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 39F39842FF49AE381766FCEB /* OpenAIModelIcon.png */; };
 		C4FF7A70DE85B02D233B97AB /* CallSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778E6A815DD2C8595BD7653B /* CallSession.swift */; };
 		C54C1E0F76ECB8F94A9AEE70 /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB5A3FC752388C5F4235248 /* FocusSession.swift */; };
 		C763037B3F88C28F89EB61F0 /* MacLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44C98F6A89143BA9C926480 /* MacLink.swift */; };
@@ -65,6 +70,7 @@
 		E455D039FC051E69CF6A9D6F /* LiveVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3BEDFC39151D3055B604B2 /* LiveVoice.swift */; };
 		E6C82A0AF17C630C38D3817D /* keramik-3d.js in Resources */ = {isa = PBXBuildFile; fileRef = 79D7C3C12936DB167CA356AC /* keramik-3d.js */; };
 		E8AF573E8BBA9219C4F616F6 /* three.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 693FD492D9A77112303F60A1 /* three.min.js */; };
+		F02EC3F11BA8A887387DA010 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B2E456D7D654160153B54D08 /* LICENSE */; };
 		F171BD7BAF58935750650B4D /* FocusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5028F9B110929B5CAC427465 /* FocusClient.swift */; };
 		F5C101DF403B8B41F401C234 /* SecurePairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C5BC31DC1FF4C0765EA0688 /* SecurePairing.swift */; };
 		F75183DA58C0B021C70ACBAF /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A31DC33ABF7869BDE4E0F6C /* Palette.swift */; };
@@ -108,6 +114,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		01BACC4EC6FEA0BBE578FF24 /* InkCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InkCanvasView.swift; sourceTree = "<group>"; };
 		020C853B32D37028CE040148 /* OFL-Fredoka.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Fredoka.txt"; sourceTree = "<group>"; };
 		039AE65B82D4536454878ECE /* ChatTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTab.swift; sourceTree = "<group>"; };
 		060DB7B07D0BE5AC3D1B9C5B /* PomodoroActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroActivity.swift; sourceTree = "<group>"; };
@@ -124,12 +131,15 @@
 		28F945FC02B251672C3E6D50 /* BlueyAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyAvatar.swift; sourceTree = "<group>"; };
 		295C3ED9BA54A9A03DD5CF49 /* HermesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesClient.swift; sourceTree = "<group>"; };
 		2AE07E841C5927326B4207FF /* NotesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesTab.swift; sourceTree = "<group>"; };
+		2E4AE770010F8F2FEC6BBEAA /* HermesModelIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = HermesModelIcon.png; sourceTree = "<group>"; };
 		382567E0278FD16B65498AEA /* HubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubClient.swift; sourceTree = "<group>"; };
+		39F39842FF49AE381766FCEB /* OpenAIModelIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = OpenAIModelIcon.png; sourceTree = "<group>"; };
 		3F158EC15BABAAD257FC577B /* DMSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Regular.ttf"; sourceTree = "<group>"; };
 		415B17799B82FDC9CB80DCCB /* TodosTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodosTab.swift; sourceTree = "<group>"; };
 		475EE52E8251FB9A91119BA4 /* BlueyAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueyAudio.swift; sourceTree = "<group>"; };
 		48FCEA6C5E452C1B0E9BBDC1 /* ChunkRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkRecorder.swift; sourceTree = "<group>"; };
 		4A31DC33ABF7869BDE4E0F6C /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
+		4ECC9B7BCB496AA746FCDA0F /* InkCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InkCanvas.swift; sourceTree = "<group>"; };
 		4F71F206238433A6F710528B /* GooglyLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglyLink.swift; sourceTree = "<group>"; };
 		5028F9B110929B5CAC427465 /* FocusClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusClient.swift; sourceTree = "<group>"; };
 		51A2088B61E3A6DBFC2EEEEE /* HermesState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesState.swift; sourceTree = "<group>"; };
@@ -155,7 +165,9 @@
 		ABAEED7339E96003AE49BEC7 /* FocusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusViews.swift; sourceTree = "<group>"; };
 		AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BlueyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B13603392444280D432F5CD7 /* NotesSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesSync.swift; sourceTree = "<group>"; };
+		B2E456D7D654160153B54D08 /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		B44C98F6A89143BA9C926480 /* MacLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLink.swift; sourceTree = "<group>"; };
+		B479DCF33FBDDE11375B9560 /* HuionProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuionProtocol.swift; sourceTree = "<group>"; };
 		B823087412DE1BCABA8A1D3F /* OFL-DMSans.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-DMSans.txt"; sourceTree = "<group>"; };
 		B82D49B8F6D86AC716AAE9A7 /* Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace.swift; sourceTree = "<group>"; };
 		B9BA485BC5F8F12AD341A9D8 /* StatsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsTab.swift; sourceTree = "<group>"; };
@@ -222,8 +234,10 @@
 				AA465BE9A3AF339DB5AC681A /* App */,
 				367D45300066EA25831FCDD6 /* Broadcast */,
 				4E4A2865153293B7FF109C8E /* Common */,
+				F93ED2037B15724702BB16D9 /* hermes */,
 				79064102162C418379FDBD8A /* keramik-3d */,
 				D55599E737C6FDE5455A5718 /* keramik-avatar */,
+				E1B195832B56FC34D2C0DE2F /* provider-icons */,
 				E8E2F33C9E110392983FDDDF /* Shared */,
 				8F41397BC1AEAB53CDE84BB3 /* Sources */,
 				5240C3EEF03B756DCF9ABD26 /* Widgets */,
@@ -306,6 +320,7 @@
 				039AE65B82D4536454878ECE /* ChatTab.swift */,
 				1D463E27CEBE894DE0997546 /* FaceView.swift */,
 				BDF9983CC6F68611E8657F5E /* Glass.swift */,
+				01BACC4EC6FEA0BBE578FF24 /* InkCanvasView.swift */,
 				2AE07E841C5927326B4207FF /* NotesTab.swift */,
 				1933884A6E3875A9825917BC /* PomodoroTab.swift */,
 				B9BA485BC5F8F12AD341A9D8 /* StatsTab.swift */,
@@ -326,6 +341,15 @@
 			path = "vendor/keramik-avatar";
 			sourceTree = "<group>";
 		};
+		E1B195832B56FC34D2C0DE2F /* provider-icons */ = {
+			isa = PBXGroup;
+			children = (
+				39F39842FF49AE381766FCEB /* OpenAIModelIcon.png */,
+			);
+			name = "provider-icons";
+			path = "vendor/provider-icons";
+			sourceTree = "<group>";
+		};
 		E8E2F33C9E110392983FDDDF /* Shared */ = {
 			isa = PBXGroup;
 			children = (
@@ -334,6 +358,8 @@
 				FFB5A3FC752388C5F4235248 /* FocusSession.swift */,
 				4F71F206238433A6F710528B /* GooglyLink.swift */,
 				51A2088B61E3A6DBFC2EEEEE /* HermesState.swift */,
+				B479DCF33FBDDE11375B9560 /* HuionProtocol.swift */,
+				4ECC9B7BCB496AA746FCDA0F /* InkCanvas.swift */,
 				A0DAB077A345B8E38071C921 /* KeramikAvatar.swift */,
 				5A3BEDFC39151D3055B604B2 /* LiveVoice.swift */,
 				4A31DC33ABF7869BDE4E0F6C /* Palette.swift */,
@@ -345,6 +371,16 @@
 				2F574059BA9C302B222352AA /* Fonts */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		F93ED2037B15724702BB16D9 /* hermes */ = {
+			isa = PBXGroup;
+			children = (
+				2E4AE770010F8F2FEC6BBEAA /* HermesModelIcon.png */,
+				B2E456D7D654160153B54D08 /* LICENSE */,
+			);
+			name = hermes;
+			path = vendor/hermes;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -458,12 +494,15 @@
 				B7776B449323D43A0746B903 /* DMSans-Medium.ttf in Resources */,
 				032520AA18487BFA0D3F7C06 /* DMSans-Regular.ttf in Resources */,
 				6C5FF10BDE711139D00DB85A /* Fredoka.ttf in Resources */,
+				182E70D83110BDEF9F059FC6 /* HermesModelIcon.png in Resources */,
 				0F5614BE9A55A8498E40F5F1 /* IBMPlexMono-Medium.ttf in Resources */,
 				9C57F9AFA362287C2B93142E /* IBMPlexMono-Regular.ttf in Resources */,
 				FC47A19572BFD9F2386A85D3 /* IBMPlexSans.ttf in Resources */,
+				F02EC3F11BA8A887387DA010 /* LICENSE in Resources */,
 				99BB01CF5598AF3396DEEAEA /* OFL-DMSans.txt in Resources */,
 				772A196648CCCC476A2E36F7 /* OFL-Fredoka.txt in Resources */,
 				0E02B38E4A5A909A93BA31C5 /* OFL-IBMPlex.txt in Resources */,
+				C2C15D41CB6913D86FA26DFB /* OpenAIModelIcon.png in Resources */,
 				E6C82A0AF17C630C38D3817D /* keramik-3d.js in Resources */,
 				63254595DAF92EDD1EEF4391 /* keramik-avatar.js in Resources */,
 				E8AF573E8BBA9219C4F616F6 /* three.min.js in Resources */,
@@ -519,6 +558,9 @@
 				D4D2D129EC16C6C8504F58E6 /* HubTheme.swift in Sources */,
 				AEC263BAA6F682C7084CF42D /* HubThreads.swift in Sources */,
 				691C5772FA6D8BF7F4A4FA0C /* HubTodosNotes.swift in Sources */,
+				6543EC80BA258D9404BA3804 /* HuionProtocol.swift in Sources */,
+				484110E2A98A8E7EEB3B175E /* InkCanvas.swift in Sources */,
+				B16332FA67C1F37A75836AAC /* InkCanvasView.swift in Sources */,
 				AF36CBC0F9F65043C0E3FBB5 /* KeramikAvatar.swift in Sources */,
 				E455D039FC051E69CF6A9D6F /* LiveVoice.swift in Sources */,
 				C763037B3F88C28F89EB61F0 /* MacLink.swift in Sources */,

@@ -21,6 +21,12 @@ targets:
       - path: iOS/Common
       - path: App
       - path: Shared
+      - path: vendor/provider-icons/OpenAIModelIcon.png
+        buildPhase: resources
+      - path: vendor/hermes/LICENSE
+        buildPhase: resources
+      - path: vendor/hermes/HermesModelIcon.png
+        buildPhase: resources
       - path: vendor/keramik-avatar/keramik-avatar.js
         buildPhase: resources
       - path: vendor/keramik-3d/three.min.js
@@ -47,6 +53,7 @@ targets:
         CFBundleDisplayName: Bluey
         UILaunchScreen: {}
         UIRequiresFullScreen: true
+        UIUserInterfaceStyle: Dark
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

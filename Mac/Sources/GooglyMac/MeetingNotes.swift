@@ -138,7 +138,7 @@ enum MeetingNotes {
         return folder
     }
 
-    private static func markdown(_ json: [String: Any], started: Date) -> String {
+    static func markdown(_ json: [String: Any], started: Date) -> String {
         let ended = (json["ended"] as? Double).map { Date(timeIntervalSince1970: $0) }
         let entries = json["entries"] as? [[String: Any]] ?? []
         let pending = json["transcribing"] as? Int ?? 0
@@ -155,18 +155,32 @@ enum MeetingNotes {
         } else {
             out.append("Still recording.")
         }
+        if let target = json["captureTarget"] as? String, !target.isEmpty {
+            out.append("Screen source: \(target).")
+        }
+        if let video = json["video"] as? String, !video.isEmpty {
+            out.append("Video: [\(video)](\(video))")
+        }
         if pending > 0 { out.append("\(pending) recording chunk(s) still being transcribed; this file updates when they're done.") }
         let asked = entries.filter { $0["kind"] as? String == "asked" }.count
         if asked > 0 { out.append("Riley asked Bluey \(asked) question(s); they're marked inline below.") }
         out += ["", "## Transcript", ""]
 
         for entry in entries {
+            let kind = entry["kind"] as? String
             let text = (entry["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { continue }
+            guard !text.isEmpty || kind == "screenshot" else { continue }
             let time = (entry["time"] as? Double).map { clock.string(from: Date(timeIntervalSince1970: $0)) } ?? ""
-            switch entry["kind"] as? String {
+            switch kind {
             case "transcript":
                 out.append("**[\(time)] Speaker \(entry["speaker"] as? String ?? "?"):** \(text)")
+            case "screenshot":
+                let path = (entry["path"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !path.isEmpty else { continue }
+                let manual = entry["manual"] as? Bool ?? false
+                let caption = text.isEmpty ? (manual ? "Screenshot" : "Folie / Bildschirmänderung") : text
+                out.append("**[\(time)] \(caption):**")
+                out.append("![\(caption)](\(path))")
             case "heard":
                 out.append("[\(time)] (live) \(text)")
             case "asked":
@@ -178,6 +192,18 @@ enum MeetingNotes {
             case "report":
                 let quoted = text.components(separatedBy: "\n").map { "> " + $0 }.joined(separator: "\n")
                 out.append("> **Research report:**\n" + quoted)
+            case "drawing":
+                let offset = entry["videoOffset"] as? String ?? ""
+                let source = entry["source"] as? String ?? "Zeichnung"
+                let img = entry["png"] as? String
+                let svg = entry["svg"] as? String
+                let stamp = offset.isEmpty ? time : "\(offset) | \(time)"
+                var line = "**[\(stamp)] Zeichnung (\(source)):** \(text)"
+                if let svg { line += " · [SVG](\(svg))" }
+                out.append(line)
+                if let img {
+                    out.append("![Zeichnung \(offset)](\(img))")
+                }
             default:
                 out.append("[\(time)] \(text)")
             }

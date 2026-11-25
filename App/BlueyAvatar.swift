@@ -85,12 +85,14 @@ struct BlueyAvatar: View {
 
 /// Colors and small styles used across the workspace screens.
 enum Theme {
-    static let background = Color.black
-    static let panel = Color(hex: Palette.panel)
+    static let background = Color(hex: Palette.workspaceCanvas)
+    static let panel = Color(hex: Palette.workspaceSidebar)
+    static let raised = Color(hex: Palette.workspaceRaised)
+    static let text = Color(hex: Palette.workspaceText)
     static let card = Color.white.opacity(0.06)
-    static let cardStrong = Color.white.opacity(0.1)
-    static let line = Color.white.opacity(0.08)
-    static let soft = Color(hex: Palette.inkSoft)
+    static let cardStrong = Color(hex: Palette.workspaceRaised)
+    static let line = Color(hex: Palette.workspaceEdge)
+    static let soft = Color(hex: Palette.workspaceMuted)
     static let accent = Color(hex: Palette.berry2)
     static let accentLight = Color(hex: Palette.berry1)
     static let green = Color(hex: 0x5BE49B)
@@ -140,3 +142,26 @@ struct BlueyEmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+
+#if os(macOS)
+struct WorkspacePaneHeader<Leading: View, Actions: View>: View {
+    let title: String
+    @ViewBuilder var leading: () -> Leading
+    @ViewBuilder var actions: () -> Actions
+
+    var body: some View {
+        HStack(spacing: 8) {
+            leading()
+            Text(title).font(.plexSans(14)).fontWeight(.medium).lineLimit(1)
+            Spacer(minLength: 4)
+            actions()
+        }
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 12)
+        .frame(height: 44)
+        .background(Theme.panel)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
+    }
+}
+#endif

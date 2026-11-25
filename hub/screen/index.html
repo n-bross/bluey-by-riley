@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Hermes Live Screen</title>
+<link rel="stylesheet" href="screen/style.css">
+<body data-ticket="__SCREEN_TICKET__">
+  <header>
+    <span id="status" role="status">Connecting…</span>
+    <button id="take" disabled>Take over</button>
+    <button id="release" disabled>Hand back</button>
+  </header>
+  <main id="display" aria-label="Hermes desktop"></main>
+  <form id="keyboard" hidden>
+    <input id="text" aria-label="Text to type on Hermes' desktop" placeholder="Type on remote desktop" autocomplete="off" autocapitalize="off">
+    <button type="submit">Type</button>
+    <button type="button" id="enter">Enter</button>
+  </form>
+  <script type="module" src="screen/viewer.js"></script>
+</body>
+</html>
