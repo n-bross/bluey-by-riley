@@ -50,6 +50,8 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
     @ObservedObject var model: WorkspaceModel
     @Binding var tab: WorkspaceTab
     var connectionName: String?
+    /// Optional Mac-only action to jump directly to the Call-Notizen window.
+    var openMeetings: (() -> Void)? = nil
     /// The face tab in the Mac sidebar.
     @ViewBuilder var face: () -> Face
     @ViewBuilder var settings: () -> Settings
@@ -150,6 +152,23 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
                 .buttonStyle(.plain)
             }
             Spacer()
+            if let openMeetings {
+                Button(action: openMeetings) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform.and.mic").frame(width: 20)
+                        Text("Call-Notizen").font(.plexSans(13.5))
+                        Spacer()
+                        Text("⌃⌥M").font(.plexMono(10)).foregroundStyle(Theme.soft.opacity(0.7))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 6)
+            }
             Button { showSettings = true } label: {
                 Label("Einstellungen", systemImage: "gearshape").font(.plexSans(13)).foregroundStyle(Theme.soft)
             }

@@ -14,7 +14,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let avatarWindow = AvatarWindow()
     private let quickNotes = QuickNotesWindow()
     private lazy var meetingWindow: Any? = {
-        if #available(macOS 15, *) { return MeetingWindow() }
+        if #available(macOS 15, *) {
+            let window = MeetingWindow()
+            window.addWorkspaceTodo = { [weak self] title, notes in
+                guard let self else { return }
+                var partial = WorkspaceSnapshot()
+                partial.todos = [TodoItem(title: title, notes: notes)]
+                self.workspace.apply(partial)
+            }
+            window.addWorkspaceNote = { [weak self] title, body in
+                guard let self else { return }
+                var partial = WorkspaceSnapshot()
+                partial.notes = [NoteItem(title: title, body: body)]
+                self.workspace.apply(partial)
+            }
+            return window
+        }
         return nil
     }()
 
@@ -95,6 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         focus.startService()
         bridge.start()
+        bridge.journal.meetingsHistory = { [weak self] in
+            if #available(macOS 15, *) { return self?.meetings?.allTimeSummaries ?? [] }
+            return []
+        }
         bridge.onHermesChange = { [weak self] in self?.notch.refreshHermes() }
         bridge.deliverNote = { [weak self] note in self?.notch.deliver(note) ?? false }
         notch.model.openSettings = { [weak self] in self?.openSettings() }
@@ -184,6 +203,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         workspaceWindow.phoneName = { [weak self] in self?.server.phoneNames.first }
         workspaceWindow.openWebApp = { [weak self] in self?.openWebApp() }
         workspaceWindow.pairPhone = { [weak self] in self?.pairingPanel.show() }
+        if #available(macOS 15, *) {
+            workspaceWindow.openMeetings = { [weak self] in self?.openMeetings() }
+        }
         workspaceWindow.model.focusCommand = { [weak self] command, task, minutes in
             self?.runFocusCommand(command, ["task": task, "minutes": minutes]) ?? ""
         }
@@ -241,14 +263,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if #available(macOS 15, *), let meetings, meetings.recording || meetings.changingCapture {
-            Task {
-                await meetings.stop()
-                while meetings.changingCapture { try? await Task.sleep(for: .milliseconds(50)) }
-                await meetings.stop()
-                sender.reply(toApplicationShouldTerminate: true)
+        if #available(macOS 15, *), let meetings {
+            if meetings.recording || meetings.changingCapture {
+                Task {
+                    await meetings.stop()
+                    while meetings.changingCapture { try? await Task.sleep(for: .milliseconds(50)) }
+                    await meetings.stop()
+                    sender.reply(toApplicationShouldTerminate: true)
+                }
+                return .terminateLater
+            } else if meetings.isTrackingTime {
+                meetings.finishTimer()
             }
-            return .terminateLater
         }
         return .terminateNow
     }
@@ -346,6 +372,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .followMouse: toggleFollow()
         case .stopPointing: overlay.goHome()
         case .notes: quickNotes.toggle()
+        case .meetingNotes: openMeetings()
+        case .meetingRecord: toggleMeetingRecording()
+        case .meetingToT3: openMeetingToT3()
         }
     }
 
@@ -573,8 +602,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if #available(macOS 15, *) { meetings?.show() }
     }
 
+    @objc private func toggleMeetingRecording() {
+        if #available(macOS 15, *), let meetings {
+            meetings.show()
+            Task { await meetings.toggleRecording() }
+        }
+    }
+
+    @objc private func openMeetingToT3() {
+        if #available(macOS 15, *) { meetings?.show(openT3Composer: true) }
+    }
+
     @objc private func openNotes() {
-        try? FileManager.default.createDirectory(at: MeetingNotes.root, withIntermediateDirectories: true)
+        MeetingNotes.ensureLibraryFolders()
         NSWorkspace.shared.open(MeetingNotes.root)
     }
 
@@ -697,10 +737,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(shortcutItem("Quick Notes", #selector(toggleQuickNotes), .notes))
         if #available(macOS 15, *), let meetings {
-            let title = meetings.recording ? "Call-Notizen · Aufnahme läuft …" : "Call-Notizen …"
-            menu.addItem(item(title, #selector(openMeetings)))
+            let openTitle: String
+            if let badge = meetings.activeTimerBadgeText {
+                openTitle = meetings.recording ? "Call-Notizen · Aufnahme (\(badge))" : "Call-Notizen · Timer (\(badge))"
+            } else {
+                openTitle = "Call-Notizen öffnen…"
+            }
+            menu.addItem(shortcutItem(openTitle, #selector(openMeetings), .meetingNotes))
+            menu.addItem(shortcutItem(meetings.recording ? "Meeting-Aufnahme stoppen" : "Meeting-Aufnahme starten",
+                                      #selector(toggleMeetingRecording), .meetingRecord))
+            menu.addItem(shortcutItem("Meeting-Aufgabe an T3 Code…", #selector(openMeetingToT3), .meetingToT3))
         }
-        menu.addItem(item("Open Meeting Notes", #selector(openNotes)))
+        menu.addItem(item("Notizen- & Nachrichten-Ordner öffnen", #selector(openNotes)))
         menu.addItem(.separator())
 
         // Control.

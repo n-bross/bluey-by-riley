@@ -28,6 +28,7 @@ final class WorkspaceWindow: NSObject, NSWindowDelegate {
     var phoneName: () -> String? = { nil }
     var openWebApp: () -> Void = {}
     var pairPhone: () -> Void = {}
+    var openMeetings: (() -> Void)? = nil
 
     init(store: WorkspaceStore) {
         backend = LocalWorkspaceBackend(store: store)
@@ -41,7 +42,7 @@ final class WorkspaceWindow: NSObject, NSWindowDelegate {
     func show(tab: WorkspaceTab? = nil) {
         if let tab { UserDefaults.standard.set(tab.rawValue, forKey: "workspaceTab") }
         if window == nil {
-            let root = MacWorkspaceRoot(model: model, animator: animator, phoneName: phoneName, openWebApp: openWebApp, pairPhone: pairPhone)
+            let root = MacWorkspaceRoot(model: model, animator: animator, phoneName: phoneName, openWebApp: openWebApp, pairPhone: pairPhone, openMeetings: openMeetings)
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                   backing: .buffered, defer: false)
@@ -102,6 +103,7 @@ private struct MacWorkspaceRoot: View {
     var phoneName: () -> String?
     var openWebApp: () -> Void
     var pairPhone: () -> Void
+    var openMeetings: (() -> Void)? = nil
     @AppStorage("workspaceTab") private var tabRaw = WorkspaceTab.chat.rawValue
     @State private var showSettings = false
 
@@ -109,6 +111,7 @@ private struct MacWorkspaceRoot: View {
         WorkspaceRootView(model: model,
                           tab: Binding(get: { WorkspaceTab(rawValue: tabRaw) ?? .chat }, set: { tabRaw = $0.rawValue }),
                           connectionName: phoneName().map { "iPhone: \($0)" } ?? "Dieser Mac",
+                          openMeetings: openMeetings,
                           face: { MacFaceTab(model: model, animator: animator) },
                           settings: { MacWorkspaceSettings(openWebApp: openWebApp, pairPhone: pairPhone) },
                           showSettings: $showSettings)
