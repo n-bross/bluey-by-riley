@@ -36,8 +36,12 @@ final class WorkspaceStore {
             }
         }
         snapshot.pruneTombstones()
-        if snapshot.defaultModel == nil { snapshot.defaultModel = ChatEngine.fallbackModel }
-        if snapshot.models.isEmpty { snapshot.models = [ChatModelInfo(id: ChatEngine.fallbackModel, name: ChatEngine.displayName(ChatEngine.fallbackModel))] }
+        if snapshot.defaultModel == nil { snapshot.defaultModel = ChatEngine.defaultModelID }
+        if snapshot.models.isEmpty {
+            let preferred = ChatEngine.defaultModelID
+            let name = preferred == ChatEngine.hermesModelID ? "Hermes (Subscription)" : ChatEngine.displayName(preferred)
+            snapshot.models = [ChatModelInfo(id: preferred, name: name)]
+        }
     }
 
     func start() {
@@ -122,8 +126,9 @@ final class WorkspaceStore {
             let models = await ChatEngine.models()
             guard !models.isEmpty else { return }
             snapshot.models = models
+            let preferred = ChatEngine.defaultModelID
             if let current = snapshot.defaultModel, !models.contains(where: { $0.id == current }) {
-                snapshot.defaultModel = models.first(where: { $0.id == ChatEngine.fallbackModel })?.id ?? models.first?.id
+                snapshot.defaultModel = models.first(where: { $0.id == preferred })?.id ?? models.first?.id
             }
             publishSoon()
         }

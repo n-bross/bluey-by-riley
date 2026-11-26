@@ -192,6 +192,39 @@ final class HermesGateway {
         return runs.first { $0.id == id }
     }
 
+    /// Runs a single request directly against Hermes' `/v1/runs` API and waits for completion,
+    /// without cluttering Bluey's visible Hermes history. Uses Hermes' configured provider (e.g. ChatGPT subscription).
+    func runSync(_ prompt: String, instructions: String, session: String, timeoutSeconds: Double = 90) async throws -> String {
+        let json = try await call("v1/runs", method: "POST", body: [
+            "input": String(prompt.prefix(195_000)),
+            "session_id": session,
+            "instructions": instructions,
+        ])
+        guard let id = json["run_id"] as? String else {
+            throw HermesError.refused(0, "Hermes lieferte keine Run-ID.")
+        }
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while Date() < deadline {
+            try Task.checkCancellation()
+            let state = try await call("v1/runs/\(id)")
+            let status = state["status"] as? String ?? "running"
+            switch status {
+            case "completed":
+                let out = (state["output"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return out
+            case "failed", "interrupted", "cancelled", "unknown":
+                let err = (state["error"] as? String) ?? (state["output"] as? String) ?? "Hermes-Lauf fehlgeschlagen (\(status))."
+                throw HermesError.refused(500, err)
+            case "waiting_for_approval":
+                throw HermesError.refused(409, "Hermes wartet auf eine Freigabe für diese Anfrage.")
+            default:
+                try await Task.sleep(for: .milliseconds(350))
+            }
+        }
+        _ = try? await call("v1/runs/\(id)/stop", method: "POST", body: [:])
+        throw HermesError.refused(408, "Hermes hat nicht rechtzeitig geantwortet.")
+    }
+
     private func follow(_ id: String) {
         polling[id]?.cancel()
         polling[id] = Task { @MainActor [weak self] in

@@ -60,67 +60,23 @@ enum MeetingNotes {
 
     // MARK: Transcription
 
-    /// Saves the chunk's audio into the session folder and transcribes it.
+    /// Saves the chunk's audio into the session folder and transcribes it via the configured TranscriptionService.
     static func transcribe(audio: Data, session: String, index: Int, sessionStarted: Date) async throws -> (segments: [Segment], folder: URL) {
         let folder = folder(session: session, started: sessionStarted)
         let audioURL = folder.appendingPathComponent("audio", isDirectory: true)
         try? FileManager.default.createDirectory(at: audioURL, withIntermediateDirectories: true)
-        try audio.write(to: audioURL.appendingPathComponent(String(format: "chunk-%03d.m4a", index)))
-        do {
-            return (try await diarized(audio), folder)
-        } catch {
-            NSLog("Googly: diarized transcription failed (\(error)), trying \(fallbackModel)")
-            return (try await plain(audio), folder)
-        }
+        let chunkURL = audioURL.appendingPathComponent(String(format: "chunk-%03d.m4a", index))
+        try audio.write(to: chunkURL)
+        let segments = try await TranscriptionService.transcribe(fileURL: chunkURL, rawData: audio, fileExtension: "m4a", preferDiarize: true)
+        return (segments, folder)
     }
 
-    private static func diarized(_ audio: Data) async throws -> [Segment] {
-        let json = try await post(audio, fields: ["model": model, "response_format": "diarized_json", "chunking_strategy": "auto"])
-        let raw = (json["segments"] as? [[String: Any]] ?? []).map {
-            Segment(speaker: $0["speaker"] as? String ?? "?", start: $0["start"] as? Double ?? 0,
-                    end: $0["end"] as? Double ?? 0, text: ($0["text"] as? String ?? "").trimmingCharacters(in: .whitespaces))
-        }
-        // Join one speaker's consecutive pieces into a single turn.
-        var turns: [Segment] = []
-        for segment in raw where !segment.text.isEmpty {
-            if var last = turns.last, last.speaker == segment.speaker, segment.start - last.end < 2.5 {
-                last.text += " " + segment.text
-                last.end = segment.end
-                turns[turns.count - 1] = last
-            } else {
-                turns.append(segment)
-            }
-        }
-        return turns
+    static func plain(_ audio: Data, fileExtension: String = "m4a") async throws -> [Segment] {
+        try await TranscriptionService.transcribe(audio: audio, fileExtension: fileExtension, preferDiarize: false)
     }
 
-    static func plain(_ audio: Data) async throws -> [Segment] {
-        let json = try await post(audio, fields: ["model": fallbackModel, "response_format": "json"])
-        let text = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? [] : [Segment(speaker: "?", start: 0, end: 0, text: text)]
-    }
-
-    private static func post(_ audio: Data, fields: [String: String]) async throws -> [String: Any] {
-        guard let key = Keychain.get(.openai) else { throw RealtimeHost.TokenError.noKey }
-        let boundary = "googly-\(UUID().uuidString)"
-        var body = Data()
-        for (name, value) in fields {
-            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
-        }
-        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"chunk.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n".data(using: .utf8)!)
-        body.append(audio)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 300
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200, let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw RealtimeHost.TokenError.failed("transcription \(code) " + (String(data: data, encoding: .utf8) ?? ""))
-        }
-        return json
+    static func plain(fileURL: URL) async throws -> [Segment] {
+        try await TranscriptionService.transcribe(fileURL: fileURL, preferDiarize: false)
     }
 
     // MARK: Notes files

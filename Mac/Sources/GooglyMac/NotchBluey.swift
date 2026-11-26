@@ -220,6 +220,17 @@ final class NotchController {
             guard let self else { done(nil); return }
             self.host.handle(Packet(command: "realtimeToken")) { reply in done(reply.text) }
         }
+        voice.runVoiceTurn = { [weak self] audioWAV, text, done in
+            guard let self else { done(VoiceTurnReply(reply: "Bluey closed.")); return }
+            self.host.handle(Packet(command: "voiceTurn", audio: audioWAV?.base64EncodedString(), text: text)) { reply in
+                if let raw = reply.text, let data = raw.data(using: .utf8),
+                   let parsed = try? JSONDecoder().decode(VoiceTurnReply.self, from: data) {
+                    done(parsed)
+                } else {
+                    done(VoiceTurnReply(reply: reply.text ?? "Keine Antwort erhalten."))
+                }
+            }
+        }
         voice.runTool = { [weak self] name, arguments, done in
             guard let self else { done("Bluey closed.", nil); return }
             self.host.handle(Packet(command: "tool", tool: name, text: arguments)) { reply in

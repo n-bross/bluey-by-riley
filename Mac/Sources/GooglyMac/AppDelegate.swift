@@ -94,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         focus.startService()
+        AIServices.hermes = bridge.hermes
         bridge.start()
         bridge.onHermesChange = { [weak self] in self?.notch.refreshHermes() }
         bridge.deliverNote = { [weak self] note in self?.notch.deliver(note) ?? false }
@@ -155,10 +156,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.updateNotchPresence() }
-        }
-
-        if Keychain.get(.openai) == nil {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.editKeys() }
         }
     }
 
@@ -756,6 +753,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.activityRunning = { [weak self] in self?.bridge.activityRunning ?? false }
         model.startActivityWatch = {
             NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/Applications/ActivityWatch.app"), configuration: NSWorkspace.OpenConfiguration())
+        }
+        model.servicesChanged = { [weak self] in
+            self?.workspace.refreshModels()
+            self?.restartIfAwake()
         }
         return model
     }()

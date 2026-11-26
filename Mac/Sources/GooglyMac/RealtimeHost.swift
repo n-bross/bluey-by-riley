@@ -33,6 +33,9 @@ final class RealtimeHost {
 
     private var engine: CursorEngine { overlay.view.engine }
 
+    /// Rolling short turn history for modular (`localHermes`) voice & call turns.
+    private var modularHistory: [(role: String, text: String)] = []
+
     /// Handles a request from the phone. `reply` sends a packet back to that phone.
     func handle(_ packet: Packet, reply: @escaping (Packet) -> Void) {
         switch packet.command {
@@ -42,8 +45,8 @@ final class RealtimeHost {
                     let focusLine = self.focus?.current.flatMap { $0.status == .ended ? nil : "Current focus task: \($0.task). State: \($0.status.rawValue)." }
                     let hermesLine = self.hermes.flatMap { h in h.waitingForYou.isEmpty ? nil : "Hermes is waiting for the user: " + h.waitingForYou.map { $0.prompt.text.prefix(160) }.joined(separator: "; ") + ". Ask them and call hermes_answer." }
                     let extra = [focusLine, hermesLine].compactMap { $0 }.joined(separator: " ")
-                    let token = try await Self.mintToken(extra: extra.isEmpty ? nil : extra)
-                    reply(Packet(command: "realtimeToken", callID: packet.callID, text: token))
+                    let envelope = try await Self.mintVoiceEnvelope(isCall: false, extra: extra.isEmpty ? nil : extra, chatContext: nil)
+                    reply(Packet(command: "realtimeToken", callID: packet.callID, text: envelope))
                 } catch {
                     reply(Packet(command: "realtimeToken", callID: packet.callID, text: nil, image: nil))
                     self.showCaption(error.localizedDescription, for: 6)
@@ -53,11 +56,21 @@ final class RealtimeHost {
             // A phone call from the chat: spoken replies, automatic turn taking, phone screen sharing.
             Task { @MainActor in
                 do {
-                    let token = try await Self.mintCallToken(chatContext: packet.text)
-                    reply(Packet(command: "callToken", callID: packet.callID, text: token))
+                    let envelope = try await Self.mintVoiceEnvelope(isCall: true, extra: nil, chatContext: packet.text)
+                    reply(Packet(command: "callToken", callID: packet.callID, text: envelope))
                 } catch {
                     reply(Packet(command: "callToken", callID: packet.callID, text: nil))
+                    self.showCaption(error.localizedDescription, for: 6)
                 }
+            }
+        case "voiceTurn", "callTurn":
+            let isCall = packet.command == "callTurn"
+            let wavData = packet.audio.flatMap { Data(base64Encoded: $0) }
+            let rawText = packet.text
+            Task { @MainActor in
+                let result = await self.handleModularTurn(audioWAV: wavData, rawText: rawText, isCall: isCall)
+                let textJSON = (try? JSONEncoder().encode(result.reply)).flatMap { String(data: $0, encoding: .utf8) }
+                reply(Packet(command: packet.command, audio: result.audio?.base64EncodedString(), callID: packet.callID, text: textJSON))
             }
         case "transcribe":
             // A recorded chunk from the phone: save it, transcribe it with speakers, send the lines back.
@@ -898,6 +911,232 @@ final class RealtimeHost {
     /// A short-lived key for the phone, so the real key never leaves the Mac.
     static func mintToken(extra: String? = nil) async throws -> String {
         try await mint(session: session(extra: extra))
+    }
+
+    /// Builds the `VoiceSessionConfig` envelope for the active `Settings.shared.voiceProvider`.
+    static func mintVoiceEnvelope(isCall: Bool, extra: String?, chatContext: String?) async throws -> String {
+        let s = Settings.shared
+        switch s.voiceProvider {
+        case .localHermes:
+            if let sttError = TranscriptionService.readinessError() {
+                throw TokenError.failed(sttError)
+            }
+            let cfg = VoiceSessionConfig(
+                provider: VoiceProvider.localHermes.rawValue,
+                ttsMode: s.ttsProvider == .apple ? "apple" : "mac",
+                language: s.transcriptionLanguage
+            )
+            return cfg.encodeEnvelope() ?? ""
+
+        case .geminiLive:
+            guard let apiKey = Keychain.get(.gemini), !apiKey.isEmpty else {
+                throw TokenError.failed("Füge deinen Gemini API-Key unter Einstellungen → Services hinzu (oder wähle Lokal + Hermes).")
+            }
+            let sessionDict = isCall ? callSession(chatContext: chatContext) : session(extra: extra)
+            let instr = sessionDict["instructions"] as? String ?? instructions
+            let toolList = isCall ? (tools + [phoneScreenTool]) : tools
+            let toolsJSON = (try? JSONSerialization.data(withJSONObject: toolList)).flatMap { String(data: $0, encoding: .utf8) }
+            let cfg = VoiceSessionConfig(
+                provider: VoiceProvider.geminiLive.rawValue,
+                token: apiKey,
+                model: s.geminiLiveModel,
+                voice: s.geminiLiveVoice,
+                instructions: instr,
+                toolsJSON: toolsJSON,
+                language: s.transcriptionLanguage
+            )
+            return cfg.encodeEnvelope() ?? ""
+
+        case .openaiRealtime:
+            let token = isCall ? try await mintCallToken(chatContext: chatContext) : try await mintToken(extra: extra)
+            let cfg = VoiceSessionConfig(
+                provider: VoiceProvider.openaiRealtime.rawValue,
+                token: token,
+                model: Self.model,
+                voice: callVoice
+            )
+            return cfg.encodeEnvelope() ?? token
+        }
+    }
+
+    // MARK: Modular Voice Brain (0 € API via Local STT + Hermes Subscription / Custom LLM + Optional TTS)
+
+    private func handleModularTurn(audioWAV: Data?, rawText: String?, isCall: Bool) async -> (reply: VoiceTurnReply, audio: Data?) {
+        var userText = ""
+        var chatContext: String? = nil
+        if let rawText, !rawText.isEmpty {
+            if let data = rawText.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                userText = (obj["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                chatContext = obj["context"] as? String
+            } else {
+                userText = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        var heard: String? = nil
+        if userText.isEmpty, let wav = audioWAV, !wav.isEmpty {
+            do {
+                let segs = try await TranscriptionService.transcribe(audio: wav, fileExtension: "wav", preferDiarize: false)
+                let transcribed = segs.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !transcribed.isEmpty else {
+                    return (VoiceTurnReply(heard: "", reply: isCall ? "" : "Ich habe nichts verstanden. Versuch es nochmal."), nil)
+                }
+                userText = transcribed
+                heard = transcribed
+            } catch {
+                return (VoiceTurnReply(reply: "Transkription fehlgeschlagen: \(error.localizedDescription)", error: error.localizedDescription), nil)
+            }
+        }
+        guard !userText.isEmpty else {
+            return (VoiceTurnReply(reply: ""), nil)
+        }
+
+        do {
+            let outcome = try await runModularBrain(userText: userText, isCall: isCall, chatContext: chatContext)
+            var audioOut: Data? = nil
+            var ttsMode: String? = nil
+            var audioFormat: String? = nil
+            if isCall, !outcome.reply.isEmpty {
+                if Settings.shared.ttsProvider == .apple {
+                    ttsMode = "apple"
+                } else if let synth = try? await TTSService.synthesize(outcome.reply) {
+                    audioOut = synth.data
+                    audioFormat = synth.format
+                    ttsMode = "audio"
+                } else {
+                    ttsMode = "apple"
+                }
+            }
+            return (VoiceTurnReply(heard: heard ?? userText, reply: outcome.reply, sleep: outcome.sleep,
+                                   report: outcome.report, ttsMode: ttsMode, audioFormat: audioFormat), audioOut)
+        } catch {
+            return (VoiceTurnReply(heard: heard ?? userText, reply: error.localizedDescription, error: error.localizedDescription), nil)
+        }
+    }
+
+    /// Runs one turn using the configured LLM (`hermes` Subscription or `openAICompatible` with native tool loop).
+    private func runModularBrain(userText: String, isCall: Bool, chatContext: String?) async throws -> (reply: String, sleep: Bool, report: String?) {
+        modularHistory.append(("user", userText))
+        if modularHistory.count > 12 { modularHistory.removeFirst(modularHistory.count - 12) }
+
+        let provider = Settings.shared.llmProvider
+        let focusLine = focus?.current.flatMap { $0.status == .ended ? nil : "Active focus: \($0.task) (\($0.status.rawValue), \(FocusSession.clock($0.remaining)) left)." } ?? "No active focus session."
+        let pomoLine = focus?.pomodoroStatus ?? ""
+
+        // If Custom OpenAI-compatible provider is active, use real native function calling!
+        if provider == .openAICompatible {
+            let base = Settings.shared.customLLMBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+            guard let url = URL(string: "\(base)/chat/completions") else {
+                throw LLMService.Failure.message("Ungültige Custom-KI Base-URL.")
+            }
+            let key = AIServices.customLLMKey(for: base)
+            let model = Settings.shared.customLLMModel
+            let styleNote = isCall
+                ? "You are on a spoken phone call with the user. Speak warmly in 1-3 short natural sentences (no markdown). Use the user's language."
+                : "Reply in ONE short, witty sentence (no markdown). When the user describes work, call focus_start."
+            var messages: [[String: Any]] = [[
+                "role": "system",
+                "content": Self.instructions + "\n\n\(styleNote)\nState: \(focusLine) \(pomoLine)"
+                    + (chatContext.map { "\nEarlier chat:\n\($0.prefix(4000))" } ?? ""),
+            ]]
+            for turn in modularHistory {
+                messages.append(["role": turn.role, "content": turn.text])
+            }
+            var shouldSleep = false
+            var reportText: String? = nil
+            for _ in 0..<4 {
+                let res = try await LLMService.openAICompatibleChat(url: url, apiKey: key, model: model, messages: messages, tools: Self.tools, timeout: 60)
+                if res.toolCalls.isEmpty {
+                    let final = res.text.isEmpty ? "Alles klar!" : res.text
+                    modularHistory.append(("assistant", final))
+                    return (final, shouldSleep, reportText)
+                }
+                let assistantToolCalls: [[String: Any]] = res.toolCalls.map { tc in
+                    ["id": tc.id, "type": "function", "function": ["name": tc.name, "arguments": tc.arguments]]
+                }
+                messages.append(["role": "assistant", "content": res.text, "tool_calls": assistantToolCalls])
+                for tc in res.toolCalls {
+                    if tc.name == "go_to_sleep" { shouldSleep = true }
+                    let out = await runTool(tc.name, arguments: tc.arguments)
+                    if tc.name == "web_research", let range = out.text.range(of: Self.reportMarker) {
+                        reportText = String(out.text[range.upperBound...])
+                    }
+                    messages.append(["role": "tool", "tool_call_id": tc.id, "content": out.text])
+                }
+            }
+            return ("Erledigt!", shouldSleep, reportText)
+        }
+
+        // Default: Hermes (ChatGPT/Codex Subscription, 0 € API!) with structured Bluey Mac-tool bridge.
+        let actionSpec = """
+        You are Bluey talking to the user \(isCall ? "on a voice call (1-3 short spoken sentences, no markdown)" : "as a short 1-sentence speech bubble, no markdown").
+        Reply in the user's language (usually German).
+        Current Mac state: \(focusLine) \(pomoLine)
+        If the user asks for a Bluey Mac action, start your reply with a single JSON line:
+        BLUEY_TOOL:{"tool":"<name>","args":{...}}
+        followed by a short friendly reply on the next line.
+        Available Bluey Mac tools:
+        - focus_start: {"task":"...","minutes":30} (omit minutes to use Pomodoro default)
+        - focus_pause: {} | focus_resume: {} | focus_end: {}
+        - break_start: {} | break_skip: {}
+        - pomodoro_settings: {"enabled":true,"focus_minutes":25,"short_break_minutes":5}
+        - codex_start: {"project":"optional","prompt":"..."} | codex_status: {} | codex_stop: {}
+        - look_at_screen: {} | what_did_i_do: {"day":"today"} | go_to_sleep: {}
+        For anything else (calendar, messages, web search, files, general questions), use your own Hermes tools directly and answer concisely!
+        """
+        let historyText = modularHistory.dropLast().suffix(6).map { "\($0.role == "user" ? "User" : "Bluey"): \($0.text)" }.joined(separator: "\n")
+        let prompt = (historyText.isEmpty ? "" : "Recent conversation:\n\(historyText)\n\n")
+            + (chatContext.map { "Chat context:\n\($0.prefix(3000))\n\n" } ?? "")
+            + "User said: \(userText)"
+        let dayFmt = DateFormatter(); dayFmt.dateFormat = "yyyy-MM-dd"
+        let raw = try await LLMService.complete(
+            prompt: prompt,
+            instructions: Self.personality + "\n\n" + actionSpec,
+            provider: provider == .openai ? .openai : .hermes,
+            hermesSession: "bluey-voice-" + dayFmt.string(from: Date()),
+            timeout: 75
+        )
+        let parsed = Self.extractBlueyToolDirective(from: raw)
+        var shouldSleep = false
+        var replyText = parsed.reply
+        if let tool = parsed.tool {
+            if tool.name == "go_to_sleep" { shouldSleep = true }
+            let out = await runTool(tool.name, arguments: tool.argumentsJSON)
+            if replyText.isEmpty {
+                replyText = out.text
+            } else if tool.name.hasPrefix("focus_") || tool.name == "break_start" || tool.name == "break_skip" {
+                // Keep Bluey's witty line, unless the tool reported an error/warning.
+                if out.text.contains("permission") || out.text.contains("Add your") || out.text.contains("already") || out.text.contains("Connect") {
+                    replyText = out.text
+                }
+            }
+        }
+        let final = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !final.isEmpty { modularHistory.append(("assistant", final)) }
+        return (final.isEmpty ? "Alles klar!" : final, shouldSleep, nil)
+    }
+
+    /// Parses an optional `BLUEY_TOOL:{"tool":"...","args":{...}}` prefix line from Hermes/LLM voice output.
+    static func extractBlueyToolDirective(from text: String) -> (tool: (name: String, argumentsJSON: String)?, reply: String) {
+        let lines = text.components(separatedBy: "\n")
+        var remaining: [String] = []
+        var found: (String, String)? = nil
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if found == nil, trimmed.hasPrefix("BLUEY_TOOL:") {
+                let jsonStr = String(trimmed.dropFirst("BLUEY_TOOL:".count)).trimmingCharacters(in: .whitespaces)
+                if let data = jsonStr.data(using: .utf8),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let name = obj["tool"] as? String {
+                    let argsObj = obj["args"] as? [String: Any] ?? [:]
+                    let argsJSON = (try? JSONSerialization.data(withJSONObject: argsObj)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+                    found = (name, argsJSON)
+                    continue
+                }
+            }
+            remaining.append(line)
+        }
+        return (found, remaining.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     private static func mint(session: [String: Any]) async throws -> String {

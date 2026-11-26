@@ -46,6 +46,7 @@
 		9C57F9AFA362287C2B93142E /* IBMPlexMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0EAD8A3C72D3899AD5CD2AA8 /* IBMPlexMono-Regular.ttf */; };
 		A3D88EE98BFEE3386A2C66DF /* BlueyAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1510156B478E99D7C4446DCA /* BlueyAppView.swift */; };
 		A5483D870CAC439E70591EAC /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46DD5058841EE2FB19872BB /* SampleHandler.swift */; };
+		ADDBDCBE2C39568EE34C484A /* VoiceConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB54C41051441A6A2E30D06E /* VoiceConfig.swift */; };
 		AEC263BAA6F682C7084CF42D /* HubThreads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BA55D21847413604146489 /* HubThreads.swift */; };
 		AF36CBC0F9F65043C0E3FBB5 /* KeramikAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DAB077A345B8E38071C921 /* KeramikAvatar.swift */; };
 		B044534E32B5458A52510C8A /* ChunkRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FCEA6C5E452C1B0E9BBDC1 /* ChunkRecorder.swift */; };
@@ -152,6 +153,7 @@
 		A0F16C5628705326925EDDE0 /* CallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallView.swift; sourceTree = "<group>"; };
 		A46DD5058841EE2FB19872BB /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		AB333D12D3F4C506B3E49505 /* IBMPlexSans.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexSans.ttf; sourceTree = "<group>"; };
+		AB54C41051441A6A2E30D06E /* VoiceConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceConfig.swift; sourceTree = "<group>"; };
 		ABAEED7339E96003AE49BEC7 /* FocusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusViews.swift; sourceTree = "<group>"; };
 		AC2005C11C4DB2EE72EF109B /* BlueyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BlueyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B13603392444280D432F5CD7 /* NotesSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesSync.swift; sourceTree = "<group>"; };
@@ -339,6 +341,7 @@
 				4A31DC33ABF7869BDE4E0F6C /* Palette.swift */,
 				5AB8136F2C46D30D8774E3EC /* Pomodoro.swift */,
 				6C5BC31DC1FF4C0765EA0688 /* SecurePairing.swift */,
+				AB54C41051441A6A2E30D06E /* VoiceConfig.swift */,
 				9523CAD3450502FE203C1BBD /* VoiceTurnBuffer.swift */,
 				B82D49B8F6D86AC716AAE9A7 /* Workspace.swift */,
 				C446C2D5D000945D3BCE3FBA /* WorkspaceStats.swift */,
@@ -536,6 +539,7 @@
 				FF7676A8F229F874417F4451 /* SoundButton.swift in Sources */,
 				84B0A32FACB3E28BDC245F5D /* StatsTab.swift in Sources */,
 				C8E4E0637074586EBBA1B3DC /* TodosTab.swift in Sources */,
+				ADDBDCBE2C39568EE34C484A /* VoiceConfig.swift in Sources */,
 				89CA80F59236155E52CDA9D9 /* VoiceTurnBuffer.swift in Sources */,
 				CFC85CABDCC2FD22EBAE4D5B /* Workspace.swift in Sources */,
 				791F713CDBC7984560E689EB /* WorkspaceChrome.swift in Sources */,

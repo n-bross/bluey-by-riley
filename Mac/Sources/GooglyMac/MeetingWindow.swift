@@ -41,6 +41,7 @@ final class MeetingWindow: ObservableObject {
     private var collecting: Task<Void, Never>?
     private var transcription: Task<Void, Never>?
     private var failedClips = Set<String>()
+    private var lastSpeechDetected = Date()
 
     func show() {
         if window == nil {
@@ -69,8 +70,8 @@ final class MeetingWindow: ObservableObject {
 
     func start() async {
         guard !busy else { return }
-        guard Keychain.get(.openai) != nil else {
-            error = "Füge deinen OpenAI-Schlüssel im Bluey-Menü hinzu."
+        if let problem = TranscriptionService.readinessError() {
+            error = problem
             return
         }
         changingCapture = true
@@ -87,13 +88,15 @@ final class MeetingWindow: ObservableObject {
             try await recorder.start()
             self.session = session
             failedClips.removeAll()
+            lastSpeechDetected = Date()
             self.recorder = recorder
             recording = true
             status = ""
             save()
             timer = Task { [weak self] in
                 while !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(18)) } catch { return }
+                    let seconds = Settings.shared.meetingChunkSeconds
+                    do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
                     await self?.collect()
                 }
             }
@@ -163,9 +166,11 @@ final class MeetingWindow: ObservableObject {
             while let clip = self.session?.clips.first(where: { $0.transcript == nil && !failedClips.contains($0.id) }) {
                 do {
                     let url = session.audioFolder.appendingPathComponent(clip.filename)
-                    let segments = try await MeetingNotes.plain(Data(contentsOf: url))
+                    let segments = try await MeetingNotes.plain(fileURL: url)
+                    let text = segments.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !text.isEmpty { self.lastSpeechDetected = Date() }
                     if let index = self.session?.clips.firstIndex(where: { $0.id == clip.id }) {
-                        self.session?.clips[index].transcript = segments.map(\.text).joined(separator: " ")
+                        self.session?.clips[index].transcript = text
                         save()
                     }
                 } catch {
@@ -176,6 +181,11 @@ final class MeetingWindow: ObservableObject {
             transcription = nil
             transcribing = false
             reloadArchive()
+            let silentLimitMin = Settings.shared.meetingAutoStopSilentMinutes
+            if self.recording, silentLimitMin > 0,
+               Date().timeIntervalSince(self.lastSpeechDetected) >= Double(silentLimitMin * 60) {
+                await self.stop(failure: "Aufnahme automatisch gestoppt nach \(silentLimitMin) Min. Stille.")
+            }
         }
     }
 
@@ -204,7 +214,7 @@ final class MeetingWindow: ObservableObject {
         do {
             let response = try await ChatEngine.stream(.init(
                 messages: session.messages + [questionWithTranscript],
-                model: ChatEngine.fallbackModel, webSearch: false,
+                model: ChatEngine.defaultModelID, webSearch: false,
                 context: "Beantworte die Rückfrage auf Grundlage des beigefügten Call-Transkripts. "
                     + "Nenne die Zeit aus dem Transkript und zitiere die relevante Stelle. "
                     + "Wenn der Call die Frage offenlässt oder das Transkript lückenhaft ist, sage das. "
@@ -278,7 +288,9 @@ private struct MeetingView: View {
                 if model.session != nil { Button("Im Finder öffnen") { model.reveal() } }
             }
             if !model.recording && !model.changingCapture {
-                Text("Bluey nimmt Mac-Audio und Mikrofon auf und sendet Audio zur Transkription an OpenAI. Informiere die Teilnehmenden vor dem Start.")
+                let provider = Settings.shared.transcriptionProvider.shortBadge
+                let silence = Settings.shared.transcriptionSilenceFilter ? " · Stille-Filter aktiv" : ""
+                Text("Transkription: \(provider)\(silence) · Abschnitte: \(Settings.shared.meetingChunkSeconds)s. Informiere die Teilnehmenden vor dem Start.")
                     .foregroundStyle(.secondary)
             }
             if !model.archive.isEmpty {

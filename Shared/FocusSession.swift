@@ -169,6 +169,14 @@ public struct FocusDecision: Equatable {
     public let confidence: Double
     public let probabilities: [String: Double]
     public let distraction: FocusDistraction?
+    public init(activity: FocusActivity, probability: Double, confidence: Double,
+                probabilities: [String: Double] = [:], distraction: FocusDistraction? = nil) {
+        self.activity = activity
+        self.probability = probability
+        self.confidence = confidence
+        self.probabilities = probabilities
+        self.distraction = distraction
+    }
     public enum DecodeError: LocalizedError {
         case invalidAnswer
         public var errorDescription: String? { "Decisions returned an unsupported or malformed answer. This check was skipped." }

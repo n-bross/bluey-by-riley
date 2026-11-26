@@ -18,12 +18,14 @@ final class SettingsModel: ObservableObject {
     var computerControlChanged: () -> Void = {}
     var activityRunning: () -> Bool = { false }
     var startActivityWatch: () -> Void = {}
+    var servicesChanged: () -> Void = {}
 
     @Published var recording: ShortcutAction?
     @Published var refused: Set<ShortcutAction> = []
     @Published var shortcutNote = ""
     @Published var hermesNote = ""
     @Published var keyNote = ""
+    @Published var customLLMTestNote = ""
     @Published var journalNote = ""
     var journal: ActivityJournal?
     var sendHubToPhone: () -> String = { "" }
@@ -100,7 +102,7 @@ final class SettingsWindowController {
             let window = NSWindow(contentViewController: hosting)
             window.title = "Bluey Settings"
             window.styleMask = [.titled, .closable, .miniaturizable]
-            window.setContentSize(NSSize(width: 680, height: 600))
+            window.setContentSize(NSSize(width: 700, height: 640))
             window.isReleasedWhenClosed = false
             window.center()
             self.window = window
@@ -126,9 +128,9 @@ struct SettingsView: View {
             FocusPane(model: model).tabItem { Label("Focus", systemImage: "timer") }.tag(2)
             JournalPane(model: model).tabItem { Label("Journal", systemImage: "book.closed") }.tag(3)
             HermesPane(model: model).tabItem { Label("Hermes", systemImage: "sparkles") }.tag(4)
-            AccountPane(model: model).tabItem { Label("Account", systemImage: "key") }.tag(5)
+            ServicesPane(model: model).tabItem { Label("Services", systemImage: "cpu") }.tag(5)
         }
-        .frame(width: 680, height: 600)
+        .frame(width: 700, height: 640)
         .onDisappear { model.stopRecording(register: model.recording != nil) }
     }
 }
@@ -461,29 +463,177 @@ private struct HermesPane: View {
     }
 }
 
-private struct AccountPane: View {
+private struct ServicesPane: View {
     @ObservedObject var model: SettingsModel
-    @State private var key = ""
+    private var s: Settings { model.settings }
+
+    @State private var openaiKey = ""
+    @State private var geminiKey = ""
+    @State private var elevenlabsKey = ""
+    @State private var customLLMKey = ""
+    @State private var customSTTKey = ""
 
     var body: some View {
         Form {
-            Section("OpenAI") {
-                SecureField(Keychain.get(.openai) == nil ? "sk-…" : "Key saved. Paste a new one to replace it.", text: $key)
-                HStack {
-                    Button("Save key") {
-                        let k = key.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !k.isEmpty else { return }
-                        Keychain.set(.openai, k); key = ""; model.keyNote = "Saved privately on this Mac."
-                    }
-                    if !model.keyNote.isEmpty { Text(model.keyNote).font(.caption).foregroundStyle(.secondary) }
+            Section {
+                Picker("Live Voice & Anrufe", selection: model.bind({ s.voiceProvider }, { s.voiceProvider = $0; model.servicesChanged() })) {
+                    ForEach(VoiceProvider.allCases) { Text($0.title).tag($0) }
                 }
-                Text("Used for his voice, focus checks and research. The phone only ever gets short-lived keys.")
+                Text(s.voiceProvider.detail)
                     .font(.caption).foregroundStyle(.secondary)
+
+                if s.voiceProvider == .localHermes {
+                    Picker("Call-Stimme (TTS)", selection: model.bind({ s.ttsProvider }, { s.ttsProvider = $0; model.servicesChanged() })) {
+                        ForEach(TTSProvider.allCases) { Text($0.title).tag($0) }
+                    }
+                    if s.ttsProvider == .elevenlabs {
+                        TextField("ElevenLabs Voice-ID", text: model.bind({ s.elevenLabsVoiceID }, { s.elevenLabsVoiceID = $0 }))
+                    } else if s.ttsProvider == .localMLX {
+                        TextField("Lokale TTS-URL", text: model.bind({ s.localTTSURL }, { s.localTTSURL = $0 }))
+                        TextField("TTS-Modell", text: model.bind({ s.localTTSModel }, { s.localTTSModel = $0 }))
+                        TextField("Stimme", text: model.bind({ s.localTTSVoice }, { s.localTTSVoice = $0 }))
+                    }
+                } else if s.voiceProvider == .geminiLive {
+                    TextField("Gemini Live Modell", text: model.bind({ s.geminiLiveModel }, { s.geminiLiveModel = $0 }))
+                    Picker("Gemini Stimme", selection: model.bind({ s.geminiLiveVoice }, { s.geminiLiveVoice = $0 })) {
+                        ForEach(["Aoede", "Puck", "Charon", "Kore", "Fenrir"], id: \.self) { Text($0).tag($0) }
+                    }
+                }
+            } header: {
+                Text("Live Voice (Notch & iPhone)")
             }
-            Section("Personality") {
-                Button("Edit his personality…", action: model.editPersonality)
+
+            Section {
+                Picker("Transkriptions-Service", selection: model.bind({ s.transcriptionProvider }, { s.transcriptionProvider = $0; model.servicesChanged() })) {
+                    ForEach(TranscriptionProvider.allCases) { Text($0.title).tag($0) }
+                }
+                Picker("Sprache", selection: model.bind({ s.transcriptionLanguage }, { s.transcriptionLanguage = $0 })) {
+                    Text("Automatisch / System").tag("")
+                    Text("Deutsch (de-DE)").tag("de-DE")
+                    Text("Englisch (en-US)").tag("en-US")
+                }
+                Toggle("Stille-Filter (leere Clips überspringen)", isOn: model.bind({ s.transcriptionSilenceFilter }, { s.transcriptionSilenceFilter = $0 }))
+                Picker("Meeting-Abschnittslänge", selection: model.bind({ s.meetingChunkSeconds }, { s.meetingChunkSeconds = $0 })) {
+                    Text("18 Sekunden").tag(18)
+                    Text("30 Sekunden (empfohlen)").tag(30)
+                    Text("60 Sekunden").tag(60)
+                    Text("90 Sekunden").tag(90)
+                }
+                Picker("Auto-Stopp bei Stille", selection: model.bind({ s.meetingAutoStopSilentMinutes }, { s.meetingAutoStopSilentMinutes = $0 })) {
+                    Text("Aus").tag(0)
+                    Text("Nach 10 Minuten").tag(10)
+                    Text("Nach 15 Minuten").tag(15)
+                    Text("Nach 30 Minuten").tag(30)
+                }
+
+                switch s.transcriptionProvider {
+                case .appleLocal:
+                    Text("Läuft komplett offline auf deinem Mac (0 € API-Kosten).")
+                        .font(.caption).foregroundStyle(.secondary)
+                case .localMLX:
+                    TextField("Lokale STT-URL", text: model.bind({ s.localSTTURL }, { s.localSTTURL = $0 }))
+                    TextField("Modell", text: model.bind({ s.localSTTModel }, { s.localSTTModel = $0 }))
+                    Text("OpenAI-kompatibler lokaler Endpunkt, z. B. mlx_audio.server oder whisper.cpp server (0 €).")
+                        .font(.caption).foregroundStyle(.secondary)
+                case .groq:
+                    TextField("Groq Modell", text: model.bind({ s.groqSTTModel }, { s.groqSTTModel = $0 }))
+                case .custom:
+                    TextField("STT-Endpunkt URL", text: model.bind({ s.customSTTURL }, { s.customSTTURL = $0 }))
+                    TextField("STT-Modell", text: model.bind({ s.customSTTModel }, { s.customSTTModel = $0 }))
+                case .openai:
+                    TextField("OpenAI STT-Modell", text: model.bind({ s.openAISTTModel }, { s.openAISTTModel = $0 }))
+                }
+            } header: {
+                Text("Meeting-Transkription & Spracherkennung")
+            }
+
+            Section {
+                Picker("Standard-KI (Chat, Rückfragen, Recherche)", selection: model.bind({ s.llmProvider }, { s.llmProvider = $0; model.servicesChanged() })) {
+                    ForEach(LLMProvider.allCases) { Text($0.title).tag($0) }
+                }
+                if s.llmProvider == .openAICompatible || s.focusProvider == .openAICompatible {
+                    HStack(spacing: 6) {
+                        Text("Vorlagen:").font(.caption).foregroundStyle(.secondary)
+                        ForEach(CustomLLMPreset.all) { preset in
+                            Button(preset.name) {
+                                s.customLLMBaseURL = preset.baseURL
+                                s.customLLMModel = preset.model
+                                model.objectWillChange.send()
+                                model.servicesChanged()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                    TextField("Base-URL", text: model.bind({ s.customLLMBaseURL }, { s.customLLMBaseURL = $0 }))
+                    TextField("Modell", text: model.bind({ s.customLLMModel }, { s.customLLMModel = $0 }))
+                    HStack {
+                        Button("Verbindung testen") {
+                            Task {
+                                model.customLLMTestNote = "Teste …"
+                                model.customLLMTestNote = await LLMService.testCustomConnection()
+                            }
+                        }
+                        if !model.customLLMTestNote.isEmpty {
+                            Text(model.customLLMTestNote).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Picker("Focus-Checks", selection: model.bind({ s.focusProvider }, { s.focusProvider = $0; model.servicesChanged() })) {
+                    ForEach(FocusProvider.allCases) { Text($0.title).tag($0) }
+                }
+                Toggle("Unveränderte Screens bei Focus überspringen", isOn: model.bind({ s.focusSkipUnchanged }, { s.focusSkipUnchanged = $0 }))
+            } header: {
+                Text("KI-Gehirn & Focus")
+            }
+
+            Section {
+                keyRow(title: "Gemini API-Key", key: .gemini, placeholder: "AIza…", text: $geminiKey)
+                keyRow(title: "Custom KI-Key (OpenRouter/Groq/…)", key: .customLLM, placeholder: "sk-or-…", text: $customLLMKey)
+                keyRow(title: "STT-Key (Groq/Custom)", key: .customSTT, placeholder: "gsk_…", text: $customSTTKey)
+                keyRow(title: "ElevenLabs API-Key", key: .elevenlabs, placeholder: "sk_…", text: $elevenlabsKey)
+                keyRow(title: "OpenAI API-Key (optional)", key: .openai, placeholder: "sk-…", text: $openaiKey)
+                if !model.keyNote.isEmpty {
+                    Text(model.keyNote).font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Alle Schlüssel werden privat unter ~/Library/Application Support/Googly/keys.json (0600) gespeichert. Ohne OpenAI-Key entstehen garantiert 0 € OpenAI-API-Kosten.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("API-Schlüssel")
+            }
+
+            Section("Persönlichkeit") {
+                Button("Blueys Persönlichkeit bearbeiten …", action: model.editPersonality)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func keyRow(title: String, key: Keychain.Key, placeholder: String, text: Binding<String>) -> some View {
+        let saved = Keychain.get(key) != nil
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                SecureField(saved ? "Gespeichert – neuen Key zum Ersetzen einfügen" : placeholder, text: text)
+            }
+            Button("Speichern") {
+                let value = text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !value.isEmpty else { return }
+                Keychain.set(key, value)
+                text.wrappedValue = ""
+                model.keyNote = "\(title) gespeichert."
+                model.objectWillChange.send()
+                model.servicesChanged()
+            }
+            .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if saved {
+                Button("Entfernen", role: .destructive) {
+                    Keychain.set(key, nil)
+                    model.keyNote = "\(title) entfernt."
+                    model.objectWillChange.send()
+                    model.servicesChanged()
+                }
+            }
+        }
     }
 }
