@@ -55,17 +55,17 @@ enum HubNotesAPI {
         }
         let data: Data, response: URLResponse
         do { (data, response) = try await URLSession.shared.data(for: r) }
-        catch { throw Failure.failed("Can't reach the hub (\(error.localizedDescription)). Is Tailscale on?") }
+        catch { throw Failure.failed("Hub nicht erreichbar (\(error.localizedDescription)). Ist Tailscale aktiv?") }
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(code) else { throw Failure.failed("Hub said \(code).") }
+        guard (200..<300).contains(code) else { throw Failure.failed("Der Hub meldet Fehler \(code).") }
         return data
     }
 
     static func health() async -> String {
         guard let data = try? await call("health"),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return "No answer." }
-        if json["authorized"] as? Bool == false { return "Reached the hub, but it doesn't know this login. Add it to tailnet_logins or set a key." }
-        return "Connected" + ((json["you"] as? String).map { " as \($0)" } ?? "") + "."
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return "Keine Antwort." }
+        if json["authorized"] as? Bool == false { return "Der Hub ist erreichbar. Füge deinen Login zu tailnet_logins hinzu oder hinterlege einen Schlüssel." }
+        return "Verbunden" + ((json["you"] as? String).map { " als \($0)" } ?? "") + "."
     }
 
     static func list() async throws -> [MacNote] { try JSONDecoder().decode([MacNote].self, from: try await call("notes")) }
@@ -122,7 +122,7 @@ final class QuickNotesModel: ObservableObject {
 
     func edited() {
         guard let id = loadedID, id == selected, text != savedText else { return }
-        status = "Editing"
+        status = "Wird bearbeitet"
         saveTask?.cancel()
         let body = text
         saveTask = Task { [weak self] in
@@ -136,11 +136,11 @@ final class QuickNotesModel: ObservableObject {
         do {
             try await HubNotesAPI.save(id, body: body)
             savedText = body
-            status = "Saved"
+            status = "Gespeichert"
             if let i = notes.firstIndex(where: { $0.id == id }) {
-                notes[i].title = body.split(separator: "\n").first.map { String($0).trimmingCharacters(in: CharacterSet(charactersIn: "# ")) } ?? "Untitled"
+                notes[i].title = body.split(separator: "\n").first.map { String($0).trimmingCharacters(in: CharacterSet(charactersIn: "# ")) } ?? "Ohne Titel"
             }
-        } catch { status = "Not saved"; problem = error.localizedDescription }
+        } catch { status = "Speichern fehlgeschlagen"; problem = error.localizedDescription }
     }
 
     func flush() async {
@@ -176,7 +176,9 @@ final class QuickNotesWindow {
             let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 440),
                             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
                             backing: .buffered, defer: false)
-            p.title = "Notes"
+            p.title = "Schnellnotizen"
+            p.appearance = NSAppearance(named: .darkAqua)
+            p.backgroundColor = NSColor(Theme.background)
             p.titlebarAppearsTransparent = true
             p.titleVisibility = .hidden
             p.isFloatingPanel = true
@@ -184,7 +186,7 @@ final class QuickNotesWindow {
             p.hidesOnDeactivate = false
             p.isMovableByWindowBackground = true
             p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            p.contentView = NSHostingView(rootView: QuickNotesView(model: model))
+            p.contentView = NSHostingView(rootView: QuickNotesView(model: model).background(Theme.background).preferredColorScheme(.dark).tint(Theme.accentLight))
             p.setFrameAutosaveName("BlueyQuickNotes")
             if p.frame.origin == .zero { p.center() }
             panel = p
@@ -214,37 +216,38 @@ struct QuickNotesView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search", text: $model.search).textFieldStyle(.plain)
+                    TextField("Notizen suchen", text: $model.search).textFieldStyle(.plain)
                     Button { Task { await model.newNote() } } label: { Image(systemName: "square.and.pencil") }
-                        .buttonStyle(.plain).help("New note (⌘N)").keyboardShortcut("n", modifiers: .command)
+                        .buttonStyle(.plain).help("Neue Notiz (⌘N)").keyboardShortcut("n", modifiers: .command)
                 }
                 .padding(.horizontal, 12).padding(.top, 34).padding(.bottom, 8)
                 List(selection: Binding(get: { model.selected }, set: { id in Task { await model.open(id) } })) {
                     ForEach(shown) { note in
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 4) {
-                                if note.pinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(Color(hex: Keramik.accent)) }
+                                if note.pinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(Theme.accentLight) }
                                 Text(note.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
                             }
                             if let p = note.preview, !p.isEmpty { Text(p).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
                         }
                         .tag(note.id)
                         .contextMenu {
-                            Button(note.pinned ? "Unpin" : "Pin") { Task { await model.togglePin(note) } }
-                            Button("Delete", role: .destructive) { Task { await model.delete(note) } }
+                            Button(note.pinned ? "Lösen" : "Anheften") { Task { await model.togglePin(note) } }
+                            Button("Löschen", role: .destructive) { Task { await model.delete(note) } }
                         }
                     }
                 }
                 .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
             }
             .frame(width: 210)
-            .background(.ultraThinMaterial)
+            .background(Theme.panel)
 
-            Divider()
+            Divider().overlay(Theme.line)
 
             VStack(alignment: .leading, spacing: 0) {
                 if let problem = model.problem {
-                    Text(problem).font(.system(size: 12)).foregroundStyle(Color(hex: Keramik.red)).padding(12)
+                    Text(problem).font(.system(size: 12)).foregroundStyle(Theme.red).padding(12)
                 }
                 if model.selected != nil {
                     TextEditor(text: $model.text)
@@ -255,8 +258,8 @@ struct QuickNotesView: View {
                 } else {
                     VStack(spacing: 8) {
                         Image(systemName: "note.text").font(.system(size: 28)).foregroundStyle(.secondary)
-                        Text(model.notes.isEmpty ? "No notes yet" : "Pick a note").font(.system(size: 14, weight: .medium))
-                        Button("New note") { Task { await model.newNote() } }
+                        Text(model.notes.isEmpty ? "Noch keine Notizen" : "Wähle eine Notiz").font(.system(size: 14, weight: .medium))
+                        Button("Neue Notiz") { Task { await model.newNote() } }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }

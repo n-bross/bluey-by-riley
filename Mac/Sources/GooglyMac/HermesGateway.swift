@@ -28,6 +28,7 @@ final class HermesGateway {
     private var announced: Set<String> = []
     /// Prompts answered automatically or by you, still listed until Hermes notices.
     private var answered: Set<String> = []
+    private var submittingAnswers: Set<String> = []
     private var history: URL
 
     private let settings = UserDefaults.standard
@@ -97,12 +98,31 @@ final class HermesGateway {
         return URLSession(configuration: config)
     }()
 
-    private func call(_ path: String, method: String = "GET", body: [String: Any]? = nil,
-                      headers: [String: String] = [:]) async throws -> [String: Any] {
+    private func request(_ path: String, viaHub: Bool) throws -> URLRequest {
+        if viaHub {
+            guard let url = URL(string: HubSettings.url.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/hermes/" + path),
+                  let scheme = url.scheme, ["https", "http"].contains(scheme), url.host != nil else {
+                throw HermesError.notConfigured
+            }
+            var request = URLRequest(url: url)
+            if !HubSettings.key.isEmpty {
+                request.setValue("Bearer \(HubSettings.key)", forHTTPHeaderField: "Authorization")
+            }
+            return request
+        }
         guard let config = Self.config() else { throw HermesError.notConfigured }
-        var request = URLRequest(url: config.url.appendingPathComponent(path))
-        request.httpMethod = method
+        guard let url = URL(string: config.url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/" + path) else {
+            throw HermesError.notConfigured
+        }
+        var request = URLRequest(url: url)
         request.setValue("Bearer \(config.key)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    private func call(_ path: String, method: String = "GET", body: [String: Any]? = nil,
+                      headers: [String: String] = [:], viaHub: Bool = false) async throws -> [String: Any] {
+        var request = try request(path, viaHub: viaHub)
+        request.httpMethod = method
         for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
         if let body {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -131,7 +151,9 @@ final class HermesGateway {
         } catch {
             available = false; problem = error.localizedDescription
         }
-        if available { for run in runs where run.isActive && polling[run.id] == nil && !run.id.hasPrefix("local-") { follow(run.id) } }
+        for run in runs where run.isActive && polling[run.id] == nil && !run.id.hasPrefix("local-") {
+            if run.viaHub == true ? HubSettings.configured : available { follow(run.id, viaHub: run.viaHub == true) }
+        }
         onChange?()
     }
 
@@ -155,30 +177,104 @@ final class HermesGateway {
     /// Hands a request to Hermes. Returns the local run once it's accepted (or failed to send).
     /// `instructions`/`session` replace Bluey's usual ones; `quiet` runs never pop up (the daily journal).
     @discardableResult
-    func send(_ prompt: String, instructions custom: String? = nil, session: String? = nil, quiet: Bool = false) async -> HermesRun {
+    func send(_ prompt: String, instructions custom: String? = nil, session: String? = nil, quiet: Bool = false, viaHub: Bool = false, options: HermesChatOptions? = nil, workspaceThreadID: UUID? = nil) async -> HermesRun {
         let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         var run = HermesRun(id: "local-" + UUID().uuidString, prompt: String(text.prefix(quiet ? 14000 : 4000)))
+        run.workspaceThreadID = workspaceThreadID
         if quiet { run.quiet = true }
+        if viaHub { run.viaHub = true }
         runs.append(run)
         trim()
         onChange?()
         var instructions = custom ?? Self.instructions
         if custom == nil, let extra = await context?(), !extra.isEmpty { instructions += "\n\nContext from Bluey:\n" + extra }
         do {
-            let json = try await call("v1/runs", method: "POST",
-                                      body: ["input": run.prompt, "session_id": session ?? sessionID, "instructions": instructions])
+            var body = options?.requestFields ?? [:]
+            body["input"] = run.prompt
+            body["session_id"] = session ?? sessionID
+            body["instructions"] = instructions
+            let json = try await call("v1/runs", method: "POST", body: body, viaHub: viaHub)
             guard let id = json["run_id"] as? String else { throw HermesError.refused(0, "no run id") }
-            available = true; problem = nil
+            if !viaHub { available = true; problem = nil }
             update(run.id) { $0.id = id; $0.status = .running }
             run.id = id
-            follow(id)
+            follow(id, viaHub: viaHub)
         } catch {
             update(run.id) { $0.status = .failed; $0.output = error.localizedDescription; $0.finished = Date() }
-            if case HermesError.unreachable = error { available = false; problem = error.localizedDescription }
+            if !viaHub, case HermesError.unreachable = error { available = false; problem = error.localizedDescription }
         }
         save()
         onChange?()
         return runs.first { $0.id == run.id } ?? run
+    }
+
+    func modelCatalog() async throws -> HermesModelCatalog {
+        let json = try await call("api/model/options?include_unconfigured=false", viaHub: HubSettings.configured)
+        return try JSONDecoder().decode(HermesModelCatalog.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+
+    /// Streams the workspace reply while normal run following handles status and approvals.
+    func streamWorkspace(_ prompt: String, threadID: UUID, options: HermesChatOptions? = nil, onEvent: @escaping (String, HermesLiveTool?) -> Void) async throws -> String {
+        let viaHub = HubSettings.configured
+        var instructions = "You are Hermes Agent. The user is chatting through Bluey. "
+            + "Use your own Browser Use and Computer Use tools when the user asks you to act. "
+            + "Answer in the user's language."
+        if let extra = await context?(), !extra.isEmpty {
+            instructions += "\n\nContext from Bluey:\n" + extra
+        }
+        let submission = Task {
+            await send(prompt, instructions: instructions, session: "bluey-mac-" + threadID.uuidString.lowercased(), viaHub: viaHub, options: options,
+                          workspaceThreadID: threadID)
+        }
+        let accepted = await submission.value
+        if accepted.status == .failed { throw ChatEngine.Failure.message(accepted.output ?? "Hermes konnte nicht starten.") }
+
+        let stream = Task {
+            var request = try request("v1/runs/\(accepted.id)/events", viaHub: viaHub)
+            request.timeoutInterval = 900
+            request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+            let (bytes, response) = try await Self.session.bytes(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+            var text = ""
+            var tools: [(id: String, kind: HermesLiveTool)] = []
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+                guard line.hasPrefix("data:"),
+                      let event = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(5).utf8)) as? [String: Any] else { continue }
+                let name = event["tool"] as? String ?? ""
+                let callID = event["tool_call_id"] as? String ?? name
+                switch event["event"] as? String {
+                case "message.delta":
+                    guard let delta = event["delta"] as? String else { continue }
+                    text += delta
+                case "tool.started":
+                    guard let kind = HermesLiveTool(tool: name) else { continue }
+                    tools.append((callID, kind))
+                case "tool.completed", "tool.failed":
+                    guard tools.contains(where: { $0.id == callID }) else { continue }
+                    tools.removeAll { $0.id == callID }
+                default:
+                    continue
+                }
+                onEvent(text, tools.last?.kind)
+            }
+        }
+        defer { stream.cancel() }
+        do {
+            while let run = runs.first(where: { $0.id == accepted.id }) {
+                try Task.checkCancellation()
+                switch run.status {
+                case .completed: return run.output ?? ""
+                case .failed: throw ChatEngine.Failure.message(run.output ?? "Hermes konnte den Auftrag nicht abschließen.")
+                case .cancelled: throw CancellationError()
+                default: try await Task.sleep(for: .milliseconds(350))
+                }
+            }
+            throw ChatEngine.Failure.message("Der Hermes-Auftrag ist nicht mehr verfügbar.")
+        } catch is CancellationError {
+            if Task.isCancelled { _ = await Task { await stop(accepted.id) }.value }
+            throw CancellationError()
+        }
     }
 
     /// Waits up to `seconds` for a run to finish; returns it either way.
@@ -225,14 +321,14 @@ final class HermesGateway {
         throw HermesError.refused(408, "Hermes hat nicht rechtzeitig geantwortet.")
     }
 
-    private func follow(_ id: String) {
+    private func follow(_ id: String, viaHub: Bool) {
         polling[id]?.cancel()
         polling[id] = Task { @MainActor [weak self] in
             var misses = 0
             while !Task.isCancelled {
                 guard let self else { return }
                 do {
-                    let json = try await self.call("v1/runs/\(id)")
+                    let json = try await self.call("v1/runs/\(id)", viaHub: viaHub)
                     misses = 0
                     if self.apply(json, to: id) { break }
                 } catch HermesError.refused(let code, _) where code == 404 {
@@ -267,9 +363,9 @@ final class HermesGateway {
         }
         var run = before
         run.pending = prompts
-        answered = answered.intersection(Set(prompts.map(\.id)))
+        answered.subtract(Set(before.pending.map(\.id)).subtracting(prompts.map(\.id)))
         if let event = json["last_event"] as? String {
-            run.activity = event.hasPrefix("tool.") ? "Using its tools…" : event.hasPrefix("message") ? "Writing…" : run.activity
+            run.activity = event.hasPrefix("tool.") ? "Hermes verwendet Werkzeuge …" : event.hasPrefix("message") ? "Hermes schreibt …" : run.activity
         }
         switch status {
         case "completed":
@@ -342,18 +438,22 @@ final class HermesGateway {
         guard let run = runs.first(where: { $0.id == runID }), let prompt = run.pending.first(where: { $0.id == promptID }) else {
             return "That request isn't waiting any more."
         }
-        answered.insert(promptID)
-        onChange?()
+        guard !answered.contains(promptID), submittingAnswers.insert(promptID).inserted else {
+            return "That request is already being answered."
+        }
+        defer { submittingAnswers.remove(promptID) }
         let path = prompt.kind == .approval ? "v1/runs/\(runID)/approval" : "v1/runs/\(runID)/clarify"
         var body: [String: Any] = ["request_id": promptID]
         if prompt.generation > 0 { body["execution_generation"] = prompt.generation }
         body[prompt.kind == .approval ? "choice" : "answer"] = choice
         do {
-            _ = try await call(path, method: "POST", body: body)
+            _ = try await call(path, method: "POST", body: body, viaHub: run.viaHub == true)
+            if runs.first(where: { $0.id == runID })?.pending.contains(where: { $0.id == promptID }) == true {
+                answered.insert(promptID)
+                onChange?()
+            }
             return prompt.kind == .approval ? (choice == "deny" ? "Denied." : "Allowed.") : "Answer sent to Hermes."
         } catch {
-            answered.remove(promptID)
-            onChange?()
             return "Couldn't answer Hermes: \(error.localizedDescription)"
         }
     }
@@ -373,11 +473,12 @@ final class HermesGateway {
     }
 
     func stop(_ id: String? = nil) async -> String {
-        guard let run = id.flatMap({ i in runs.first { $0.id == i } }) ?? runs.last(where: \.isActive) else {
+        let target = id.map { id in runs.first { $0.id == id && $0.isActive } } ?? runs.last(where: \.isActive)
+        guard let run = target else {
             return "Hermes isn't working on anything."
         }
         do {
-            _ = try await call("v1/runs/\(run.id)/stop", method: "POST", body: [:])
+            _ = try await call("v1/runs/\(run.id)/stop", method: "POST", body: [:], viaHub: run.viaHub == true)
             return "Asked Hermes to stop \"\(run.prompt.prefix(60))\"."
         } catch { return error.localizedDescription }
     }

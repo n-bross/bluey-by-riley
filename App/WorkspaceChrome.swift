@@ -65,29 +65,56 @@ struct TabHeader<Chips: View>: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if ui.searching {
-                searchField
-            } else {
-                titleRow
-            }
-            #if os(macOS)
-            if let icon = tab.composeIcon {
-                Button { ui.composeCount += 1 } label: {
-                    Label(tab.composeTitle, systemImage: icon)
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: 0) {
+            WorkspacePaneHeader(title: tab.title, leading: {
+                Image(systemName: tab.icon).foregroundStyle(Theme.accentLight)
+            }, actions: {
+                status
+                if let icon = tab.composeIcon {
+                    Button { ui.composeCount += 1 } label: {
+                        Image(systemName: icon).frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut("n", modifiers: .command)
+                    .help(tab.composeTitle).accessibilityLabel(tab.composeTitle)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut("n", modifiers: .command)
-                .help("\(tab.composeTitle) (⌘N)")
+                if tab.searchable {
+                    Button {
+                        if ui.searching { ui.endSearch() }
+                        else { ui.searching = true }
+                    } label: {
+                        Image(systemName: "magnifyingglass").frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut("f", modifiers: .command)
+                    .help("Suchen").accessibilityLabel("Suchen")
+                    .accessibilityAddTraits(ui.searching ? .isSelected : [])
+                }
+            })
+            if ui.searching {
+                HStack {
+                    TextField(tab.searchPrompt, text: $ui.search)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($searchFocused)
+                    Button("Fertig") { ui.endSearch() }.keyboardShortcut(.cancelAction)
+                }
+                .padding(12)
+                .onAppear { searchFocused = true }
             }
-            #endif
+            chips().padding(12)
+        }
+        #else
+        VStack(alignment: .leading, spacing: 14) {
+            if ui.searching { searchField }
+            else { titleRow }
             chips()
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
         .padding(.bottom, 10)
         .animation(.snappy(duration: 0.25), value: ui.searching)
+        #endif
     }
 
     private var titleRow: some View {

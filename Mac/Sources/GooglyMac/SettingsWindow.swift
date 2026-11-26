@@ -50,21 +50,21 @@ final class SettingsModel: ObservableObject {
     func record(_ action: ShortcutAction) {
         stopRecording(register: false)
         recording = action
-        shortcutNote = "Press the new shortcut for “\(action.title)”. Esc cancels, ⌫ turns it off."
+        shortcutNote = "Drücke den neuen Kurzbefehl für „\(action.title)“. Esc bricht ab, ⌫ deaktiviert ihn."
         HotKeys.shared.unregisterAll()  // so pressing an existing combination doesn't trigger it
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, let action = self.recording else { return event }
             switch Int(event.keyCode) {
             case 53: self.shortcutNote = ""                                  // Esc
-            case 51, 117: ShortcutStore.set(action, nil); self.shortcutNote = "\(action.title): off."  // ⌫ / ⌦
+            case 51, 117: ShortcutStore.set(action, nil); self.shortcutNote = "\(action.title) ist deaktiviert."  // ⌫ / ⌦
             default:
                 guard let shortcut = Shortcut(event: event) else {
-                    self.shortcutNote = "Use at least one of ⌃ ⌥ ⌘ (or a function key)."
+                    self.shortcutNote = "Verwende mindestens ⌃, ⌥, ⌘ oder eine Funktionstaste."
                     return nil
                 }
                 if let other = ShortcutStore.conflict(shortcut, except: action) {
                     ShortcutStore.set(other, nil)
-                    self.shortcutNote = "\(shortcut.display) moved here from “\(other.title)” (now off)."
+                    self.shortcutNote = "\(shortcut.display) ist jetzt hier zugeordnet. „\(other.title)“ wurde deaktiviert."
                 } else { self.shortcutNote = "\(action.title): \(shortcut.display)" }
                 ShortcutStore.set(action, shortcut)
             }
@@ -79,14 +79,14 @@ final class SettingsModel: ObservableObject {
         if recording != nil || register {
             recording = nil
             refused = Set(registerShortcuts())
-            if !refused.isEmpty { shortcutNote = "macOS refused: " + refused.map(\.title).joined(separator: ", ") + ". Another app may own that combination." }
+            if !refused.isEmpty { shortcutNote = "macOS hat diese Kurzbefehle abgelehnt: " + refused.map(\.title).joined(separator: ", ") + ". Möglicherweise verwendet eine andere App die Tastenkombination." }
         }
     }
 
     func resetShortcuts() {
         ShortcutStore.resetAll()
         stopRecording(register: true)
-        shortcutNote = "Back to the defaults."
+        shortcutNote = "Standardeinstellungen wiederhergestellt."
     }
 }
 
@@ -100,7 +100,8 @@ final class SettingsWindowController {
         if window == nil {
             let hosting = NSHostingController(rootView: SettingsView(model: model))
             let window = NSWindow(contentViewController: hosting)
-            window.title = "Bluey Settings"
+            window.title = "Bluey · Einstellungen"
+            window.appearance = NSAppearance(named: .darkAqua)
             window.styleMask = [.titled, .closable, .miniaturizable]
             window.setContentSize(NSSize(width: 700, height: 640))
             window.isReleasedWhenClosed = false
@@ -123,14 +124,17 @@ struct SettingsView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            GeneralPane(model: model).tabItem { Label("General", systemImage: "gearshape") }.tag(0)
-            ShortcutsPane(model: model).tabItem { Label("Shortcuts", systemImage: "command") }.tag(1)
-            FocusPane(model: model).tabItem { Label("Focus", systemImage: "timer") }.tag(2)
+            GeneralPane(model: model).tabItem { Label("Allgemein", systemImage: "gearshape") }.tag(0)
+            ShortcutsPane(model: model).tabItem { Label("Kurzbefehle", systemImage: "command") }.tag(1)
+            FocusPane(model: model).tabItem { Label("Fokus", systemImage: "timer") }.tag(2)
             JournalPane(model: model).tabItem { Label("Journal", systemImage: "book.closed") }.tag(3)
             HermesPane(model: model).tabItem { Label("Hermes", systemImage: "sparkles") }.tag(4)
             ServicesPane(model: model).tabItem { Label("Services", systemImage: "cpu") }.tag(5)
         }
         .frame(width: 700, height: 640)
+        .background(Theme.background)
+        .preferredColorScheme(.dark)
+        .tint(Theme.accentLight)
         .onDisappear { model.stopRecording(register: model.recording != nil) }
     }
 }
@@ -141,43 +145,43 @@ private struct GeneralPane: View {
 
     var body: some View {
         Form {
-            Section("Where he lives") {
-                Toggle("Bluey in the notch (works without the phone)", isOn: model.bind({ s.notchMode }, { s.notchMode = $0; model.applyNotchMode() }))
-                Toggle("Floating Keramik avatar window", isOn: model.bind({ s.showAvatarWindow }, { s.showAvatarWindow = $0; model.setAvatarWindow($0) }))
-                Toggle("Eyes follow my mouse when idle", isOn: model.bind({ s.followMouse }, { s.followMouse = $0 }))
+            Section("Darstellung") {
+                Toggle("Bluey in der Notch (auch ohne iPhone)", isOn: model.bind({ s.notchMode }, { s.notchMode = $0; model.applyNotchMode() }))
+                Toggle("Schwebendes Avatarfenster", isOn: model.bind({ s.showAvatarWindow }, { s.showAvatarWindow = $0; model.setAvatarWindow($0) }))
+                Toggle("Augen folgen dem Mauszeiger im Leerlauf", isOn: model.bind({ s.followMouse }, { s.followMouse = $0 }))
                 HStack {
-                    Text("Phone sits under")
+                    Text("Position des iPhones")
                     Spacer()
                     Picker("", selection: model.bind({ Int((s.phonePosition * 100).rounded()) }, { s.phonePosition = Double($0) / 100 })) {
-                        Text("Left").tag(20); Text("Center").tag(50); Text("Right").tag(80)
+                        Text("Links").tag(20); Text("Mitte").tag(50); Text("Rechts").tag(80)
                     }
                     .pickerStyle(.segmented).frame(width: 220).labelsHidden()
                 }
-                Button("Pair iPhone (QR)…", action: model.pairPhone)
+                Button("iPhone koppeln (QR) …", action: model.pairPhone)
             }
-            Section("Pointer") {
-                Picker("Style", selection: model.bind({ s.pointerStyle }, { s.pointerStyle = $0 })) {
+            Section("Mauszeiger") {
+                Picker("Stil", selection: model.bind({ s.pointerStyle }, { s.pointerStyle = $0 })) {
                     ForEach(PointerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Picker("Size", selection: model.bind({ Int(s.cursorSize) }, { s.cursorSize = Double($0) })) {
-                    Text("Small").tag(48); Text("Medium").tag(72); Text("Large").tag(96); Text("Huge").tag(120)
+                Picker("Größe", selection: model.bind({ Int(s.cursorSize) }, { s.cursorSize = Double($0) })) {
+                    Text("Klein").tag(48); Text("Mittel").tag(72); Text("Groß").tag(96); Text("Sehr groß").tag(120)
                 }
                 .pickerStyle(.segmented)
                 if s.pointerStyle == .blueberry {
-                    Picker("Trail", selection: model.bind({ s.trail }, { s.trail = $0 })) {
+                    Picker("Spur", selection: model.bind({ s.trail }, { s.trail = $0 })) {
                         ForEach(PointerTrail.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                 }
-                Toggle("Show the pointer", isOn: model.bind({ s.showCursor }, { s.showCursor = $0 }))
+                Toggle("Mauszeiger anzeigen", isOn: model.bind({ s.showCursor }, { s.showCursor = $0 }))
             }
-            Section("Computer control") {
-                Toggle("Let him click, type and open things when I ask", isOn: model.bind({ s.computerControl }, { s.computerControl = $0; model.computerControlChanged() }))
+            Section("Computersteuerung") {
+                Toggle("Bluey darf auf Anfrage klicken, tippen und Apps öffnen", isOn: model.bind({ s.computerControl }, { s.computerControl = $0; model.computerControlChanged() }))
                 if s.computerControl && !ComputerControl.isTrusted {
                     HStack {
-                        Label("Needs Accessibility permission", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Label("Bedienungshilfen müssen freigegeben sein", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                         Spacer()
-                        Button("Allow…", action: model.allowComputerControl)
+                        Button("Freigeben …", action: model.allowComputerControl)
                     }
                 }
             }
@@ -201,23 +205,23 @@ private struct ShortcutsPane: View {
                         Spacer()
                         if model.refused.contains(action) {
                             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                                .help("macOS didn't accept this combination. Pick another one.")
+                                .help("macOS akzeptiert diese Tastenkombination nicht. Wähle eine andere.")
                         }
                         Button { model.record(action) } label: {
-                            Text(model.recording == action ? "Press keys…" : (ShortcutStore.get(action)?.display ?? "Off"))
+                            Text(model.recording == action ? "Tasten drücken …" : (ShortcutStore.get(action)?.display ?? "Aus"))
                                 .font(.system(.body, design: .rounded).weight(.medium))
                                 .frame(minWidth: 96)
                         }
                         .buttonStyle(.bordered)
-                        .tint(model.recording == action ? Color(hex: Keramik.accent) : nil)
+                        .tint(model.recording == action ? Theme.accentLight : nil)
                     }
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 6) {
                     if !model.shortcutNote.isEmpty { Text(model.shortcutNote).foregroundStyle(.secondary) }
-                    Text("Click a shortcut, then press the new combination. Shortcuts work everywhere, even when Bluey isn't in front.")
+                    Text("Klicke einen Kurzbefehl an und drücke die neue Tastenkombination. Kurzbefehle funktionieren auch, wenn Bluey im Hintergrund ist.")
                         .foregroundStyle(.secondary)
-                    Button("Reset to defaults", action: model.resetShortcuts)
+                    Button("Standardeinstellungen wiederherstellen", action: model.resetShortcuts)
                 }
                 .font(.caption)
             }
@@ -234,10 +238,10 @@ private struct FocusPane: View {
         Form {
             Section {
                 HStack(spacing: 12) {
-                    Image(systemName: "timer").font(.title2).foregroundStyle(Color(hex: Keramik.accent))
+                    Image(systemName: "timer").font(.title2).foregroundStyle(Theme.accentLight)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Pomodoro").font(.headline)
-                        Text(p.enabled ? "Bluey sends you on a break after every round." : "Off: focus sessions just end.")
+                        Text(p.enabled ? "Nach jeder Fokusrunde schlägt Bluey eine Pause vor." : "Ohne Pomodoro endet der Fokus nach Ablauf der Zeit.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -253,23 +257,23 @@ private struct FocusPane: View {
                 }
             }
             if p.enabled {
-                Section("Times") {
-                    MinuteRow(title: "Focus round", value: p.focusMinutes, range: 1...240, step: 5) { var s = p; s.focusMinutes = $0; model.setPomodoro(s) }
-                    MinuteRow(title: "Short break", value: p.shortBreakMinutes, range: 1...60, step: 1) { var s = p; s.shortBreakMinutes = $0; model.setPomodoro(s) }
-                    MinuteRow(title: "Long break", value: p.longBreakMinutes, range: 1...120, step: 5) { var s = p; s.longBreakMinutes = $0; model.setPomodoro(s) }
+                Section("Zeiten") {
+                    MinuteRow(title: "Fokusrunde", value: p.focusMinutes, range: 1...240, step: 5) { var s = p; s.focusMinutes = $0; model.setPomodoro(s) }
+                    MinuteRow(title: "Kurze Pause", value: p.shortBreakMinutes, range: 1...60, step: 1) { var s = p; s.shortBreakMinutes = $0; model.setPomodoro(s) }
+                    MinuteRow(title: "Lange Pause", value: p.longBreakMinutes, range: 1...120, step: 5) { var s = p; s.longBreakMinutes = $0; model.setPomodoro(s) }
                     Stepper(value: model.bind({ p.roundsBeforeLongBreak }, { var s = p; s.roundsBeforeLongBreak = $0; model.setPomodoro(s) }), in: 1...12) {
-                        HStack { Text("Long break after"); Spacer(); Text("\(p.roundsBeforeLongBreak) rounds").monospacedDigit().foregroundStyle(.secondary) }
+                        HStack { Text("Lange Pause nach"); Spacer(); Text("\(p.roundsBeforeLongBreak) Runden").monospacedDigit().foregroundStyle(.secondary) }
                     }
                 }
-                Section("Flow") {
-                    Toggle("Start breaks automatically", isOn: model.bind({ p.autoStartBreaks }, { var s = p; s.autoStartBreaks = $0; model.setPomodoro(s) }))
-                    Toggle("Start the next round automatically", isOn: model.bind({ p.autoStartFocus }, { var s = p; s.autoStartFocus = $0; model.setPomodoro(s) }))
-                    Text("Off is gentler: after a break Bluey asks before he starts watching the screen again.")
+                Section("Ablauf") {
+                    Toggle("Pausen automatisch starten", isOn: model.bind({ p.autoStartBreaks }, { var s = p; s.autoStartBreaks = $0; model.setPomodoro(s) }))
+                    Toggle("Nächste Runde automatisch starten", isOn: model.bind({ p.autoStartFocus }, { var s = p; s.autoStartFocus = $0; model.setPomodoro(s) }))
+                    Text("Bei manueller Fortsetzung fragt Bluey nach der Pause, bevor er den Bildschirm wieder prüft.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Section("Testing") {
-                Toggle("Developer Mode (4× clock, checks every 10 s)", isOn: model.bind({ model.focus.developerMode }, { model.focus.setDeveloperMode($0) }))
+            Section("Entwicklung") {
+                Toggle("Entwicklermodus (vierfaches Tempo, Prüfung alle 10 s)", isOn: model.bind({ model.focus.developerMode }, { model.focus.setDeveloperMode($0) }))
             }
         }
         .formStyle(.grouped)
@@ -295,9 +299,9 @@ private struct PresetCard: View {
             }
             .frame(maxWidth: .infinity, minHeight: 58)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(selected ? Color(hex: Keramik.accent).opacity(0.14) : Color.primary.opacity(0.04)))
+                .fill(selected ? Theme.accentLight.opacity(0.14) : Color.primary.opacity(0.04)))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(selected ? Color(hex: Keramik.accent) : Color.primary.opacity(0.1), lineWidth: selected ? 2 : 1))
+                .strokeBorder(selected ? Theme.accentLight : Color.primary.opacity(0.1), lineWidth: selected ? 2 : 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -312,7 +316,7 @@ private struct CycleBar: View {
         let rounds = settings.roundsBeforeLongBreak
         var segments: [(minutes: Double, color: Color, label: String)] = []
         for i in 1...rounds {
-            segments.append((settings.focusMinutes, Color(hex: Keramik.accent), "\(Int(settings.focusMinutes))"))
+            segments.append((settings.focusMinutes, Theme.accentLight, "\(Int(settings.focusMinutes))"))
             segments.append(i == rounds ? (settings.longBreakMinutes, Color(hex: 0x40C8E0), "\(Int(settings.longBreakMinutes))")
                                         : (settings.shortBreakMinutes, Color(hex: Keramik.green), "\(Int(settings.shortBreakMinutes))"))
         }
@@ -327,7 +331,7 @@ private struct CycleBar: View {
                     }
                 }
             }
-            Text("One cycle: \(ActivitySummary.duration(total * 60)) · focus \(ActivitySummary.duration(settings.focusMinutes * Double(rounds) * 60))")
+            Text("Ein Zyklus: \(ActivitySummary.duration(total * 60)) · Fokus \(ActivitySummary.duration(settings.focusMinutes * Double(rounds) * 60))")
                 .font(.caption2).foregroundStyle(.secondary)
         }
     }
@@ -356,35 +360,35 @@ private struct JournalPane: View {
         Form {
             Section {
                 HStack(spacing: 12) {
-                    Image(systemName: "book.closed").font(.title2).foregroundStyle(Color(hex: Keramik.accent))
+                    Image(systemName: "book.closed").font(.title2).foregroundStyle(Theme.accentLight)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Daily journal").font(.headline)
-                        Text("A timeline of what you worked on, built from ActivityWatch, focus sessions and Hermes requests. Ask Bluey “what did I do today?”")
+                        Text("Tagesjournal").font(.headline)
+                        Text("Übersicht deiner Arbeit aus ActivityWatch, Fokus-Sessions und Hermes-Aufträgen. Frag Bluey „Was habe ich heute gemacht?“")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Toggle("", isOn: model.bind({ s.journalEnabled }, { s.journalEnabled = $0 })).toggleStyle(.switch).labelsHidden()
                 }
                 HStack {
-                    Text("Saved in ~/Documents/Bluey Journal, one file per day")
+                    Text("Eine Datei pro Tag unter ~/Documents/Bluey Journal")
                     Spacer()
-                    Button("Open Folder") {
+                    Button("Ordner öffnen") {
                         try? FileManager.default.createDirectory(at: ActivityJournal.folder, withIntermediateDirectories: true)
                         NSWorkspace.shared.open(ActivityJournal.folder)
                     }
                 }
             }
             Section {
-                Toggle("Send each day to Hermes", isOn: model.bind({ s.journalToHermes }, { s.journalToHermes = $0 }))
-                Picker("Send today's journal from", selection: model.bind({ s.journalHour }, { s.journalHour = $0 })) {
+                Toggle("Jeden Tag an Hermes senden", isOn: model.bind({ s.journalToHermes }, { s.journalToHermes = $0 }))
+                Picker("Tagesjournal senden ab", selection: model.bind({ s.journalHour }, { s.journalHour = $0 })) {
                     ForEach(12..<24) { Text(String(format: "%02d:00", $0)).tag($0) }
                 }
                 .disabled(!s.journalToHermes)
                 HStack {
-                    Button("Send today now") {
+                    Button("Heutiges Journal jetzt senden") {
                         Task {
-                            model.journalNote = "Sending…"
-                            model.journalNote = await model.journal?.send(day: Date()) ?? "Journal unavailable."
+                            model.journalNote = "Wird gesendet …"
+                            model.journalNote = await model.journal?.send(day: Date()) ?? "Journal nicht verfügbar."
                         }
                     }
                     .disabled(!model.hermes.available)
@@ -393,7 +397,7 @@ private struct JournalPane: View {
             } header: {
                 Text("Hermes")
             } footer: {
-                Text("Each day goes to Hermes once, in its own session, so Hermes can answer questions about your days later. Days the Mac was off are sent the next time Bluey runs. Window titles are included; they stay between Bluey, the journal files and your Hermes.")
+                Text("Hermes erhält pro Tag eine eigene Session, um Fragen zu deiner Arbeit beantworten zu können. Hat der Mac einen Tag verpasst, sendet Bluey das Journal beim nächsten Start. Dazu gehören Fenstertitel. Sie bleiben zwischen Bluey, deinen Journaldateien und Hermes.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -408,52 +412,52 @@ private struct HermesPane: View {
 
     var body: some View {
         Form {
-            Section("Connection") {
+            Section("Verbindung") {
                 HStack {
                     Circle().fill(model.hermes.available ? Color(hex: Keramik.green) : Color(hex: Keramik.amber)).frame(width: 8, height: 8)
-                    Text(model.hermes.available ? "Connected" : (model.hermes.problem ?? "Not connected"))
+                    Text(model.hermes.available ? "Verbunden" : (model.hermes.problem ?? "Nicht verbunden"))
                     Spacer()
                     Button("Test") {
-                        Task { await model.hermes.refresh(); model.hermesNote = model.hermes.available ? "Hermes answered." : (model.hermes.problem ?? "No answer."); model.objectWillChange.send() }
+                        Task { await model.hermes.refresh(); model.hermesNote = model.hermes.available ? "Hermes hat geantwortet." : (model.hermes.problem ?? "Keine Antwort."); model.objectWillChange.send() }
                     }
                 }
-                TextField("API server", text: $url)
-                SecureField(HermesGateway.config() == nil ? "API key (API_SERVER_KEY)" : "Key saved. Paste a new one to replace it.", text: $key)
-                Button("Save") {
+                TextField("API-Server", text: $url)
+                SecureField(HermesGateway.config() == nil ? "API-Schlüssel (API_SERVER_KEY)" : "Schlüssel gespeichert. Zum Ersetzen einen neuen einfügen.", text: $key)
+                Button("Speichern") {
                     let newKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard let k = newKey.isEmpty ? HermesGateway.config()?.key : newKey else { model.hermesNote = "Paste the key first."; return }
+                    guard let k = newKey.isEmpty ? HermesGateway.config()?.key : newKey else { model.hermesNote = "Füge zuerst den Schlüssel ein."; return }
                     HermesGateway.saveConfig(url: url.trimmingCharacters(in: .whitespacesAndNewlines), key: k)
                     key = ""
-                    Task { await model.hermes.refresh(); model.hermesNote = model.hermes.available ? "Saved and connected." : "Saved, but Hermes didn't answer."; model.objectWillChange.send() }
+                    Task { await model.hermes.refresh(); model.hermesNote = model.hermes.available ? "Gespeichert und verbunden." : "Gespeichert. Hermes hat nicht geantwortet."; model.objectWillChange.send() }
                 }
                 if !model.hermesNote.isEmpty { Text(model.hermesNote).font(.caption).foregroundStyle(.secondary) }
             }
             Section {
-                Picker("Risky steps", selection: model.bind({ model.hermes.mode }, { model.hermes.mode = $0 })) {
+                Picker("Freigaben", selection: model.bind({ model.hermes.mode }, { model.hermes.mode = $0 })) {
                     ForEach(HermesApprovalMode.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
             } footer: {
-                Text("Hermes' own policy runs first (smart mode settles clear cases itself); this decides what happens with the rest.")
+                Text("Hermes wendet zuerst seine eigenen Freigaberegeln an. Diese Einstellung gilt, wenn danach noch eine Entscheidung erforderlich ist.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 TextField("https://shipyard-1.your-tailnet.ts.net:8790", text: model.bind({ HubSettings.url }, { HubSettings.url = $0 }))
-                SecureField("Key (optional with Tailscale)", text: model.bind({ HubSettings.key }, { HubSettings.key = $0 }))
+                SecureField("Schlüssel (mit Tailscale optional)", text: model.bind({ HubSettings.key }, { HubSettings.key = $0 }))
                 HStack {
-                    Button("Test") { Task { model.hubNote = "Testing…"; model.hubNote = await HubNotesAPI.health() } }
-                    Button("Send to iPhone") { model.hubNote = model.sendHubToPhone() }
+                    Button("Test") { Task { model.hubNote = "Verbindung wird geprüft …"; model.hubNote = await HubNotesAPI.health() } }
+                    Button("An iPhone senden") { model.hubNote = model.sendHubToPhone() }
                     Spacer()
                 }
                 if !model.hubNote.isEmpty { Text(model.hubNote).font(.caption).foregroundStyle(.secondary) }
             } header: { Text("Bluey Hub") } footer: {
-                Text("Your hub runs next to Hermes on your server (notes, todos and chats without the laptop). Over Tailscale your login is enough. The phone gets this address automatically when it connects.")
+                Text("Der Bluey Hub läuft auf demselben Server wie Hermes. So sind Notizen, Todos und Chats auch ohne Mac erreichbar. Über Tailscale reicht dein Login. Das iPhone erhält die Adresse beim Verbinden.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("ActivityWatch") {
                 HStack {
                     Circle().fill(model.activityRunning() ? Color(hex: Keramik.green) : Color(hex: Keramik.amber)).frame(width: 8, height: 8)
-                    Text(model.activityRunning() ? "Tracking active time" : "Not running")
+                    Text(model.activityRunning() ? "Erfasst aktive Zeit" : "Läuft nicht")
                     Spacer()
                     if !model.activityRunning() { Button("Start", action: model.startActivityWatch) }
                 }
@@ -603,7 +607,7 @@ private struct ServicesPane: View {
             }
 
             Section("Persönlichkeit") {
-                Button("Blueys Persönlichkeit bearbeiten …", action: model.editPersonality)
+                Button("Persönlichkeit bearbeiten …", action: model.editPersonality)
             }
         }
         .formStyle(.grouped)

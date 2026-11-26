@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bluey · Workspace-Entwurf</title>
+<style>
+:root { font-family: var(--font-sans, system-ui), sans-serif; color-scheme: dark; }
+* { box-sizing: border-box; }
+button { font: inherit; }
+.demo { --base:#10131d; --surface:#171b28; --raised:#202637; --edge:#33394a; --text:#f0f2fb; --quiet:#aeb6ca; --berry:#a9bcff; --ready:#a1debd; color:var(--text); font-size:13px; }
+.workspace { position:relative; overflow:hidden; background:var(--base); border:1px solid var(--edge); border-radius:16px; }
+.toolbar, .pane-title { min-height:46px; display:flex; align-items:center; justify-content:space-between; gap:7px; padding:0 12px; border-bottom:1px solid var(--edge); }
+.toolbar { background:var(--surface); }
+.brand { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:650; }
+.berry { position:relative; display:inline-block; width:19px; height:17px; border-radius:46% 50% 50% 43%; background:linear-gradient(145deg,#a9bcff,#5f78ec 62%,#343da0); }
+.berry::before, .berry::after { content:""; position:absolute; width:4px; height:4px; border-radius:50%; background:#111526; top:6px; }
+.berry::before { left:5px; } .berry::after { right:5px; }
+button { color:var(--text); background:transparent; border:1px solid transparent; border-radius:7px; min-height:29px; padding:4px 8px; cursor:pointer; }
+button:hover, button[aria-pressed=true], button[aria-selected=true] { background:var(--raised); border-color:var(--edge); }
+button:focus-visible, .pane-title:focus-visible { outline:2px solid var(--berry); outline-offset:1px; }
+.actions { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.grid { display:grid; grid-template-columns:minmax(110px,.68fr) minmax(220px,1.5fr) minmax(182px,1fr); min-height:328px; }
+.workspace[data-mode=closed] .grid, .workspace[data-mode=floating] .grid { grid-template-columns:minmax(110px,.68fr) minmax(220px,2.5fr); }
+.rail { background:var(--surface); border-right:1px solid var(--edge); padding:11px 8px; }
+.quiet { color:var(--quiet); }
+.rail h2, .chat h2, .pane-title h2 { margin:0; font-size:13px; font-weight:650; }
+.rail h2 { margin:0 4px 10px; }
+.thread { display:block; padding:8px; border-radius:8px; overflow-wrap:anywhere; }
+.thread small { display:block; margin-top:4px; color:var(--quiet); }
+.thread.selected { background:var(--raised); }
+[hidden] { display:none !important; }
+.tabbar { display:flex; gap:3px; flex-wrap:wrap; }
+.chat { min-width:0; display:flex; flex-direction:column; }
+.messages { flex:1; padding:12px; display:grid; gap:10px; align-content:start; }
+.message { margin:0; line-height:1.5; padding:9px; background:var(--surface); border-radius:10px; max-width:100%; }
+.message.user { background:#293452; justify-self:end; }
+.tool-card { display:flex; align-items:center; justify-content:space-between; gap:5px; padding:5px 8px; border:1px solid var(--edge); border-radius:8px; }
+.tool-card button { color:var(--berry); }
+.composer { margin:0 12px 12px; background:var(--surface); border:1px solid var(--edge); border-radius:10px; padding:10px; color:var(--quiet); }
+.inspector { min-width:0; background:var(--surface); border-left:1px solid var(--edge); }
+.viewer { margin:10px; padding:8px; border:1px solid var(--edge); border-radius:10px; background:var(--base); }
+.canvas { aspect-ratio:16/10; display:grid; place-items:center; border-radius:6px; background:linear-gradient(150deg,#263b59,#172338 66%,#284457); color:#dbe8ff; font-size:12px; }
+.viewer footer { display:flex; justify-content:space-between; align-items:center; gap:4px; margin-top:8px; flex-wrap:wrap; }
+.dot { color:var(--ready); }
+.primary { background:#293552; color:#dce5ff; border-color:#49608b; }
+.example { padding:0 12px 12px; }
+.example h3 { font-size:14px; margin:0 0 4px; }
+.example p { margin:4px 0; }
+.notes { margin:10px 12px; color:var(--quiet); line-height:1.45; }
+.workspace[data-mode=closed] .inspector { display:none; }
+.workspace[data-mode=floating] .inspector { position:absolute; z-index:1; top:58px; right:12px; width:min(305px,82%); min-width:182px; min-height:185px; max-width:100%; max-height:calc(100% - 46px); overflow:auto; resize:both; border:1px solid #526384; border-radius:12px; box-shadow:0 10px 35px #0009; }
+.workspace[data-mode=floating] .pane-title { cursor:grab; touch-action:none; }
+@media(max-width:580px) {
+  .grid, .workspace[data-mode=closed] .grid, .workspace[data-mode=floating] .grid { grid-template-columns:1fr; min-height:285px; }
+  .grid .rail { display:none; }
+  .workspace[data-mode=docked] .inspector { border-left:0; border-top:1px solid var(--edge); }
+  .viewer { max-width:360px; }
+  .toolbar { flex-wrap:wrap; padding:7px 9px; }
+  .tabbar { order:3; }
+}
+@media(prefers-reduced-motion:reduce) { * { scroll-behavior:auto; } }
+</style>
+</head>
+<body>
+<main class="demo">
+  <section class="workspace" data-mode="docked" aria-label="Interaktiver Bluey-Entwurf">
+    <header class="toolbar">
+      <div class="brand"><span class="berry" aria-hidden="true"></span>Bluey</div>
+      <nav class="tabbar" aria-label="Bluey-Bereiche">
+        <button data-section="chat" aria-pressed="true">Chat</button>
+        <button data-section="notes" aria-pressed="false">Notizen</button>
+        <button data-section="calls" aria-pressed="false">Call-Notizen</button>
+        <button data-section="settings" aria-pressed="false">Einstellungen</button>
+      </nav>
+      <div class="actions" aria-label="Bildschirm-Layout">
+        <button id="dock" aria-pressed="true">Andocken</button>
+        <button id="float" aria-pressed="false">Abdocken</button>
+      </div>
+    </header>
+    <div class="grid">
+      <nav class="rail" aria-label="Beispiel-Chats">
+        <h2 id="rail-title">Chats</h2>
+        <span class="thread selected" id="rail-selected">Recherche <small>Hermes · gerade eben</small></span>
+        <span class="thread" id="rail-other">Projektideen <small>Hermes · gestern</small></span>
+      </nav>
+      <section class="chat" aria-label="Beispiel-Chat">
+        <header class="pane-title"><h2 id="section-title">Recherche</h2></header>
+        <div class="messages" id="chat-content">
+          <p class="message user">Öffne die Projektseite.</p>
+          <p class="message">Ich schaue sie mir im Browser an.</p>
+          <div class="tool-card"><span>Browser Use</span><button id="show">Bildschirm</button></div>
+        </div>
+        <div class="composer">Nachricht an Hermes …</div>
+        <div class="messages" id="section-content" hidden>
+          <div class="message example"><h3 id="section-heading"></h3><p id="section-detail" class="quiet"></p></div>
+        </div>
+      </section>
+      <aside class="inspector" aria-label="Hermes-Bildschirm">
+        <header class="pane-title" id="handle" tabindex="0" aria-label="Hermes-Bildschirm. Abdocken und an der Kopfzeile ziehen oder mit Pfeiltasten verschieben.">
+          <h2>Hermes-Bildschirm</h2><button id="close" aria-label="Bildschirm schließen">×</button>
+        </header>
+        <div class="viewer">
+          <div class="canvas">Beispielbild</div>
+          <footer><span id="status"><span class="dot" aria-hidden="true">●</span> Zuschauermodus</span><button class="primary" id="control">Übernehmen</button></footer>
+        </div>
+        <p class="notes">Entwurf · Bildschirm und Steuerung sind hier simuliert.</p>
+      </aside>
+    </div>
+  </section>
+</main>
+<script>
+const workspace = document.querySelector('.workspace');
+const inspector = document.querySelector('.inspector');
+const handle = document.getElementById('handle');
+const dock = document.getElementById('dock');
+const float = document.getElementById('float');
+const show = document.getElementById('show');
+const control = document.getElementById('control');
+const sections = {
+  chat: ['Chats','Recherche','Projektideen','Recherche','',''],
+  notes: ['Notizen','Projektideen','Besprechung','Projektideen','Nächste Schritte','Entwurf prüfen und offene Fragen sammeln.'],
+  calls: ['Call-Notizen','Projektbesprechung','Stichpunkte','Projektbesprechung','Aufnahme','Bereit · Start nach Bestätigung.'],
+  settings: ['Einstellungen','Verbindungen','Darstellung','Verbindungen','Hermes','Hier stehen Verbindungsstatus und Zugang zum Live-Bildschirm.']
+};
+document.querySelectorAll('[data-section]').forEach(button => {
+  button.onclick = () => {
+    const name = button.dataset.section;
+    const values = sections[name];
+    const fields = ['rail-title','rail-selected','rail-other','section-title','section-heading','section-detail'];
+    fields.forEach((field,i) => { document.getElementById(field).firstChild
+      ? document.getElementById(field).firstChild.textContent = values[i]
+      : document.getElementById(field).textContent = values[i]; });
+    for (const small of document.querySelectorAll('.thread small')) small.hidden = name !== 'chat';
+    document.getElementById('chat-content').hidden = name !== 'chat';
+    document.querySelector('.composer').hidden = name !== 'chat';
+    document.getElementById('section-content').hidden = name === 'chat';
+    document.querySelectorAll('[data-section]').forEach(item => item.setAttribute('aria-pressed', item === button));
+  };
+});
+let previous = 'docked';
+let owns = false;
+let drag = null;
+function setMode(mode) {
+  if (mode !== 'closed') previous = mode;
+  workspace.dataset.mode = mode;
+  dock.setAttribute('aria-pressed', mode === 'docked');
+  float.setAttribute('aria-pressed', mode === 'floating');
+  if (mode !== 'floating') for (const property of ['left','top','width','height']) inspector.style.removeProperty(property);
+}
+function move(x,y) {
+  inspector.style.left = Math.max(0,Math.min(x,workspace.clientWidth - inspector.offsetWidth)) + 'px';
+  inspector.style.top = Math.max(46,Math.min(y,workspace.clientHeight - inspector.offsetHeight)) + 'px';
+}
+dock.onclick = () => setMode('docked');
+float.onclick = () => { setMode('floating'); handle.focus(); };
+show.onclick = () => { setMode(previous); handle.focus(); };
+document.getElementById('close').onclick = () => { setMode('closed'); show.focus(); };
+control.onclick = () => {
+  owns = !owns;
+  document.getElementById('status').textContent = owns ? 'Du steuerst' : 'Zuschauermodus';
+  control.textContent = owns ? 'Zurückgeben' : 'Übernehmen';
+};
+handle.onpointerdown = (event) => {
+  if (workspace.dataset.mode !== 'floating' || event.target.closest('button')) return;
+  drag = {x:event.clientX,y:event.clientY,left:inspector.offsetLeft,top:inspector.offsetTop};
+  handle.setPointerCapture(event.pointerId);
+};
+handle.onpointermove = (event) => { if (drag) move(drag.left + event.clientX - drag.x,drag.top + event.clientY - drag.y); };
+handle.onpointerup = (event) => { if (drag && workspace.getBoundingClientRect().right - event.clientX < 12) setMode('docked'); drag = null; };
+handle.onpointercancel = () => { drag = null; };
+handle.onkeydown = (event) => {
+  if (workspace.dataset.mode !== 'floating') return;
+  const directions = {ArrowLeft:[-12,0],ArrowRight:[12,0],ArrowUp:[0,-12],ArrowDown:[0,12]};
+  const offset = directions[event.key];
+  if (!offset || event.target !== handle) return;
+  event.preventDefault();
+  move(inspector.offsetLeft + offset[0],inspector.offsetTop + offset[1]);
+};
+new ResizeObserver(() => {
+  if (workspace.dataset.mode === 'floating') move(inspector.offsetLeft, inspector.offsetTop);
+}).observe(workspace);
+</script>
+</body>
+</html>

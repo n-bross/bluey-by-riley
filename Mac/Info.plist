@@ -8,6 +8,15 @@
 	<string>GooglyMac</string>
 	<key>CFBundleIdentifier</key>
 	<string>co.visionairy.googly.mac</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>co.visionairy.googly.control</string>
+			<key>CFBundleURLSchemes</key>
+			<array><string>bluey-control</string></array>
+		</dict>
+	</array>
 	<key>CFBundleName</key>
 	<string>Bluey</string>
 	<key>CFBundlePackageType</key>
@@ -20,6 +29,8 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluey verbindet sich über Bluetooth mit deinem Huion Note X10, um Offline-Seiten lokal auszulesen und live zu zeichnen.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_googly._tcp</string>

@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import Combine
 import GooglyShared
 
 @MainActor
@@ -13,10 +14,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let pairingPanel = PairingPanel()
     private let avatarWindow = AvatarWindow()
     private let quickNotes = QuickNotesWindow()
+    private let controlWindow = BlueyControlWindow()
+    private let huion = HuionBridge()
+    private lazy var screenAnnotator = ScreenAnnotator(huion: huion)
+    private var huionCancellables: Set<AnyCancellable> = []
+    private var meetingRecordingStartedAt: Date?
+    private var standaloneVideoTimerStartedAt: Date?
     private lazy var meetingWindow: Any? = {
-        if #available(macOS 15, *) { return MeetingWindow() }
+        if #available(macOS 15, *) {
+            let m = MeetingWindow()
+            m.onRecordingStateChanged = { [weak self] recording, startedAt in
+                guard let self else { return }
+                self.meetingRecordingStartedAt = recording ? startedAt : nil
+                self.syncRecordingClock()
+            }
+            m.onOpenNote = { [weak self] noteID in
+                guard let self else { return }
+                self.workspaceWindow.model.huion.pendingSelectNoteID = noteID
+                self.workspaceWindow.show(tab: .notes)
+            }
+            m.onNewInkNote = { [weak self] in
+                guard let self else { return }
+                let id = self.workspaceWindow.model.addNote(drawing: InkDrawing(), source: "huion-live")
+                self.workspaceWindow.model.huion.pendingSelectNoteID = id
+                self.workspaceWindow.show(tab: .notes)
+            }
+            m.onOpenScreenAnnotator = { [weak self] in
+                self?.screenAnnotator.show()
+            }
+            return m
+        }
         return nil
     }()
+
+    private var meetingDetector: Any?
 
     @available(macOS 15, *)
     private var meetings: MeetingWindow? { meetingWindow as? MeetingWindow }
@@ -96,14 +127,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         focus.startService()
         AIServices.hermes = bridge.hermes
         bridge.start()
-        bridge.onHermesChange = { [weak self] in self?.notch.refreshHermes() }
+        bridge.onHermesChange = { [weak self] in
+            guard let self else { return }
+            self.notch.refreshHermes()
+            self.workspaceWindow.model.hermesApprovals = self.bridge.hermes.waitingForYou.compactMap { run, prompt in
+                guard let threadID = run.workspaceThreadID else { return nil }
+                return WorkspaceHermesApproval(threadID: threadID, runID: run.id, prompt: prompt)
+            }
+        }
         bridge.deliverNote = { [weak self] note in self?.notch.deliver(note) ?? false }
+        if #available(macOS 15, *) {
+            bridge.meetingContext = { [weak self] in self?.meetings?.hermesContextSummary() }
+        }
         notch.model.openSettings = { [weak self] in self?.openSettings() }
         if ProcessInfo.processInfo.environment["GOOGLY_DEMO_SETTINGS"] != nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.openSettings() }
         }
         applyNotchMode()
         startWorkspace()
+        if #available(macOS 15, *) {
+            let detector = TeamsMeetingDetector()
+            meetingDetector = detector
+            detector.start { [weak self] in self?.meetings }
+        }
         if CommandLine.arguments.contains("--pair") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.pairingPanel.show() }
         }
@@ -171,6 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.server.broadcast(Packet(command: "chatDelta", text: WorkspaceCoding.string(delta)))
         })
         workspace.onPomodoroChange = { [weak self] old, new in self?.pomodoroChanged(from: old, to: new) }
+        workspace.enableHermes(bridge.hermes)
         workspace.start()
         web.focusState = { [weak self] in
             guard let self else { return nil }
@@ -184,11 +231,234 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         workspaceWindow.model.focusCommand = { [weak self] command, task, minutes in
             self?.runFocusCommand(command, ["task": task, "minutes": minutes]) ?? ""
         }
+        workspaceWindow.openSettingsWindow = { [weak self] in self?.openSettings() }
+        workspaceWindow.model.answerHermesApproval = { [gateway = bridge.hermes] approval, answer in
+            let result = await gateway.respond(runID: approval.runID, promptID: approval.prompt.id, choice: answer)
+            guard ["Allowed.", "Denied.", "Answer sent to Hermes."].contains(result) else {
+                throw WorkspaceError(result)
+            }
+        }
+        workspaceWindow.model.loadHermesModels = { [gateway = bridge.hermes] in try await gateway.modelCatalog() }
         workspaceWindow.model.currentFocus = focus.current
         workspaceWindow.model.focusHistory = focus.history
+        startHuion()
         if CommandLine.arguments.contains("--window") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.workspaceWindow.show() }
         }
+    }
+
+    /// Connects the Huion Note X10 (USB + BLE), handwriting OCR, Bluey Hub sync, and the Screen Annotator.
+    private func startHuion() {
+        let uiHuion = workspaceWindow.model.huion
+        uiHuion.isAvailable = true
+        uiHuion.orientation = huion.orientation
+        uiHuion.deleteAfterSync = huion.deleteAfterOfflineSync
+
+        func pushStatus() {
+            uiHuion.usbConnected = huion.usbConnected
+            uiHuion.bleConnected = huion.bleState.isConnected
+            uiHuion.isConnected = huion.isAnyDeviceConnected
+            uiHuion.statusText = huion.isSyncingOffline ? huion.bleState.label : huion.statusHeadline
+            uiHuion.isSyncingOffline = huion.isSyncingOffline
+            uiHuion.syncMessage = huion.syncSummary
+            uiHuion.pinRequired = huion.pinRequired
+            uiHuion.deleteAfterSync = huion.deleteAfterOfflineSync
+            uiHuion.orientation = huion.orientation
+        }
+
+        huion.$usbConnected.sink { _ in Task { @MainActor in pushStatus() } }.store(in: &huionCancellables)
+        huion.$bleState.sink { _ in Task { @MainActor in pushStatus() } }.store(in: &huionCancellables)
+        huion.$batteryPercent.sink { _ in Task { @MainActor in pushStatus() } }.store(in: &huionCancellables)
+        huion.$isSyncingOffline.sink { _ in Task { @MainActor in pushStatus() } }.store(in: &huionCancellables)
+        huion.$syncSummary.sink { _ in Task { @MainActor in pushStatus() } }.store(in: &huionCancellables)
+        huion.$pinRequired.sink { _ in Task { @MainActor in pushStatus() } }.store(in: &huionCancellables)
+        huion.$deleteAfterOfflineSync.sink { _ in Task { @MainActor in pushStatus() } }.store(in: &huionCancellables)
+        huion.$orientation.sink { _ in Task { @MainActor in pushStatus() } }.store(in: &huionCancellables)
+
+        huion.onNotePenSample = { [weak uiHuion] sample in
+            uiHuion?.liveSample = sample
+            uiHuion?.liveSampleSeq &+= 1
+        }
+
+        // Physical "New Page" button on the Huion Note X10 -> open a fresh ink page immediately!
+        huion.onNewPageRequested = { [weak self] in
+            guard let self else { return }
+            if self.screenAnnotator.isVisible {
+                self.screenAnnotator.snapshotForRecordingIfNeeded()
+                if !self.screenAnnotator.model.strokes.isEmpty {
+                    let drawing = InkDrawing(aspectRatio: 16.0 / 9.0, paper: .dark, strokes: self.screenAnnotator.model.strokes)
+                    _ = HuionArchive.save(drawing: drawing, namePrefix: "screen-page")
+                    _ = self.workspaceWindow.model.addNote(title: "Bildschirm-Notiz", body: "", drawing: drawing, source: "screen-annotation")
+                }
+                self.screenAnnotator.model.clear()
+                return
+            }
+            // Preserve the last used paper style if any recent ink note exists.
+            let paper = self.workspace.snapshot.visibleNotes.first(where: { $0.drawing != nil })?.drawing?.paper ?? .paper
+            let newID = self.workspaceWindow.model.addNote(drawing: InkDrawing(paper: paper), source: "huion-live")
+            self.workspaceWindow.model.huion.pendingSelectNoteID = newID
+            self.workspaceWindow.model.huion.newPageRequestSeq &+= 1
+            self.workspaceWindow.show(tab: .notes)
+        }
+
+        uiHuion.connectBLE = { [weak self] in self?.huion.connectBLE() }
+        uiHuion.disconnectBLE = { [weak self] in self?.huion.disconnectBLE() }
+        uiHuion.startBLELivePen = { [weak self] in self?.huion.startBLELivePen() }
+        uiHuion.syncOffline = { [weak self] pin in self?.huion.syncOfflinePages(pin: pin) }
+        uiHuion.openScreenAnnotator = { [weak self] in self?.screenAnnotator.toggle() }
+        uiHuion.openArchiveFolder = {
+            try? FileManager.default.createDirectory(at: HuionArchive.folder, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(HuionArchive.folder)
+        }
+        if #available(macOS 15, *) {
+            uiHuion.openMeetingWindow = { [weak self] in self?.meetings?.show() }
+        }
+        uiHuion.toggleVideoTimer = { [weak self] in
+            guard let self else { return }
+            if self.standaloneVideoTimerStartedAt == nil {
+                self.standaloneVideoTimerStartedAt = Date()
+            } else {
+                self.standaloneVideoTimerStartedAt = nil
+            }
+            self.syncRecordingClock()
+        }
+        uiHuion.onNoteDrawingUpdated = { [weak self] note in
+            guard let self, let drawing = note.drawing, !drawing.isEmpty else { return }
+            let offset = drawing.videoTimeRange?.start ?? self.activeRecordingOffset()
+            if #available(macOS 15, *), let meetings = self.meetings, meetings.recording {
+                meetings.recordDrawing(
+                    source: "Notiz",
+                    noteID: note.id,
+                    drawing: drawing,
+                    offsetSeconds: offset,
+                    ocrText: note.body.isEmpty ? nil : note.body
+                )
+            } else if let offset {
+                // Standalone video timer: save a timecode-named copy to ~/Documents/Bluey Notes/Huion
+                let stamp = InkDrawing.formatFileTime(offset)
+                _ = HuionArchive.save(drawing: drawing, namePrefix: "video-\(stamp)-notiz")
+            }
+        }
+        uiHuion.setOrientation = { [weak self] orient in self?.huion.orientation = orient }
+        uiHuion.setDeleteAfterSync = { [weak self] flag in self?.huion.deleteAfterOfflineSync = flag }
+        uiHuion.transcribeDrawing = { [weak self] drawing in
+            let model = self?.workspace.snapshot.defaultModel ?? ChatEngine.fallbackModel
+            let res = try await HuionOCR.transcribe(drawing, model: model)
+            return (res.title, res.markdown, res.todos)
+        }
+        uiHuion.syncNoteToHub = { note in
+            try await HuionOCR.syncToHub(note: note)
+        }
+        uiHuion.exportDrawing = { drawing, name in
+            HuionArchive.save(drawing: drawing, namePrefix: name)?.svg
+        }
+
+        // Offline BLE page import -> local archive + Bluey Note + background AI OCR + Bluey Hub sync.
+        huion.onOfflinePageImported = { [weak self] pageIndex, drawing in
+            guard let self else { return false }
+            let archived = HuionArchive.save(drawing: drawing, namePrefix: "page-\(pageIndex + 1)")
+            let noteID = self.workspaceWindow.model.addNote(
+                title: "Huion Seite \(pageIndex + 1)",
+                body: "",
+                drawing: drawing,
+                source: "huion-offline"
+            )
+            self.workspace.save()
+
+            // Run AI handwriting OCR + Bluey Hub sync asynchronously so transfer stays fast.
+            let ocrModel = self.workspace.snapshot.defaultModel ?? ChatEngine.fallbackModel
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let res = try? await HuionOCR.transcribe(drawing, model: ocrModel),
+                   var note = self.workspaceWindow.model.note(noteID) {
+                    if !res.title.isEmpty { note.title = res.title }
+                    note.body = res.markdown
+                    self.workspaceWindow.model.update(note)
+                    if let hubID = try? await HuionOCR.syncToHub(note: note) {
+                        note.hubNoteID = hubID
+                        self.workspaceWindow.model.update(note)
+                    }
+                }
+            }
+            return archived != nil
+        }
+
+        // Screen Annotator -> Bluey Chat, Hermes, Bluey Note, or automatic Meeting timeline snapshot.
+        screenAnnotator.onMeetingDrawingSnapshot = { [weak self] offset, drawing, png in
+            guard let self, !drawing.isEmpty else { return }
+            if #available(macOS 15, *), let meetings = self.meetings, meetings.recording {
+                meetings.recordDrawing(
+                    source: "Bildschirm",
+                    noteID: nil,
+                    drawing: drawing,
+                    compositePNG: png,
+                    offsetSeconds: offset
+                )
+            } else {
+                let stamp = InkDrawing.formatFileTime(offset)
+                _ = HuionArchive.save(drawing: drawing, namePrefix: "video-\(stamp)-bildschirm")
+                if let png {
+                    let dir = HuionArchive.folder
+                    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                    try? png.write(to: dir.appendingPathComponent("video-\(stamp)_bildschirm.png"), options: .atomic)
+                }
+            }
+        }
+        screenAnnotator.onSendToBluey = { [weak self] png, prompt in
+            guard let self else { return }
+            do {
+                let att = try self.workspace.storeAttachment(png, name: "bildschirm-markierung.png", mime: "image/png")
+                _ = try self.workspace.send(ChatRequest(threadID: nil, text: prompt, attachments: [att]))
+                self.workspaceWindow.show(tab: .chat)
+            } catch {
+                self.host.showReply("Konnte den markierten Bildschirm nicht senden: \(error.localizedDescription)")
+            }
+        }
+        screenAnnotator.onSendToHermes = { [weak self] _, prompt in
+            guard let self else { return }
+            self.host.showReply("Hab deine Bildschirm-Markierung an Hermes geschickt.")
+            Task { await self.bridge.hermes.send(prompt) }
+        }
+        screenAnnotator.onSaveAsNote = { [weak self] drawing, png in
+            guard let self else { return }
+            let saved = HuionArchive.save(drawing: drawing, namePrefix: "screen")
+            var body = ""
+            if let png {
+                let dir = HuionArchive.folder
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+                let shotURL = dir.appendingPathComponent("screen_\(f.string(from: Date())).png")
+                if (try? png.write(to: shotURL, options: .atomic)) != nil {
+                    body = "Screenshot: `\(shotURL.path)`"
+                }
+            } else if let svg = saved?.svg {
+                body = "SVG: `\(svg.path)`"
+            }
+            _ = self.workspaceWindow.model.addNote(
+                title: "Bildschirm-Notiz",
+                body: body,
+                drawing: drawing,
+                source: "screen-annotation"
+            )
+            self.workspaceWindow.show(tab: .notes)
+        }
+
+        huion.start()
+        pushStatus()
+        syncRecordingClock()
+    }
+
+    private func activeRecordingOffset() -> Double? {
+        guard let started = meetingRecordingStartedAt ?? standaloneVideoTimerStartedAt else { return nil }
+        return max(0, Date().timeIntervalSince(started))
+    }
+
+    private func syncRecordingClock() {
+        let activeDate = meetingRecordingStartedAt ?? standaloneVideoTimerStartedAt
+        let label = meetingRecordingStartedAt != nil ? "Call-Aufnahme" : (standaloneVideoTimerStartedAt != nil ? "Video-Timer" : nil)
+        workspaceWindow.model.huion.recordingStartedAt = activeDate
+        workspaceWindow.model.huion.recordingLabel = label
+        screenAnnotator.setRecordingStartedAt(activeDate)
     }
 
     private func runFocusCommand(_ command: String, _ args: [String: Any]) -> String {
@@ -230,6 +500,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openWorkspace() { workspaceWindow.show() }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        if urls.contains(where: { $0.scheme == "bluey-control" && $0.host == "open" }) {
+            openControlWindow()
+        }
+    }
+
+    @objc func openControlWindow() {
+        let openMeetings: (() -> Void)?
+        if #available(macOS 15, *) {
+            openMeetings = { [weak self] in self?.openMeetings() }
+        } else {
+            openMeetings = nil
+        }
+        controlWindow.show {
+            BlueyControlView(
+                animator: workspaceWindow.animator,
+                openSection: { [weak self] in self?.workspaceWindow.show(tab: $0) },
+                toggleListening: { [weak self] in self?.toggleAwake() },
+                isListening: { [weak self] in
+                    guard let self else { return false }
+                    return self.server.phoneNames.isEmpty ? self.notch.isListening : self.host.awake
+                },
+                openLive: { [weak self] in
+                    guard let self else { return }
+                    self.workspaceWindow.show(tab: .chat)
+                    let model = self.workspaceWindow.model
+                    model.openHermesScreen?(model.selectedWorkspaceThread)
+                },
+                openMeetings: openMeetings,
+                stopActions: { [weak self] in self?.stopActions() },
+                openSettings: { [weak self] in self?.openSettings() }
+            )
+        }
+    }
+
     @objc private func openWebApp() { NSWorkspace.shared.open(web.url) }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -251,6 +556,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        huion.stop()
+        screenAnnotator.hide()
         notch.stop()
         workspace.save()
         focus.shutdown()
@@ -343,6 +650,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .followMouse: toggleFollow()
         case .stopPointing: overlay.goHome()
         case .notes: quickNotes.toggle()
+        case .annotateScreen: screenAnnotator.toggle()
         }
     }
 
@@ -566,8 +874,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }.fire()
     }
 
-    @objc private func openMeetings() {
+    @objc func openMeetings() {
         if #available(macOS 15, *) { meetings?.show() }
+    }
+
+    @objc private func stopMeetingRecording() {
+        if #available(macOS 15, *), let meetings {
+            Task { await meetings.stop() }
+        }
     }
 
     @objc private func openNotes() {
@@ -643,9 +957,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Where he is.
         let phones = server.phoneNames
-        let where_ = phones.isEmpty ? (settings.notchMode ? "Bluey is in the notch" : "Waiting for the phone app…")
-                                    : "Phone connected: \(phones.joined(separator: ", "))"
-        let status = NSMenuItem(title: settings.hidden ? "Bluey is hidden" : where_, action: nil, keyEquivalent: "")
+        let where_ = phones.isEmpty ? (settings.notchMode ? "Bluey ist in der Notch" : "Wartet auf das iPhone …")
+                                    : "iPhone verbunden: \(phones.joined(separator: ", "))"
+        let status = NSMenuItem(title: settings.hidden ? "Bluey ist ausgeblendet" : where_, action: nil, keyEquivalent: "")
         status.isEnabled = false
         menu.addItem(status)
         menu.addItem(.separator())
@@ -653,6 +967,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         open.keyEquivalentModifierMask = [.control, .option]
         open.target = self
         menu.addItem(open)
+        menu.addItem(item("Bluey-Steuerung öffnen …", #selector(openControlWindow)))
         let webItem = NSMenuItem(title: "Web-App öffnen (\(web.url.host ?? "127.0.0.1"):\(web.port))", action: #selector(openWebApp), keyEquivalent: "")
         webItem.target = self
         menu.addItem(webItem)
@@ -660,23 +975,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Focus and Pomodoro.
         if let session = focus.current, session.status != .ended {
-            let title = NSMenuItem(title: "Focus: \(session.task) · \(FocusSession.clock(session.remaining))", action: nil, keyEquivalent: "")
+            let title = NSMenuItem(title: "Fokus: \(session.task) · \(FocusSession.clock(session.remaining))", action: nil, keyEquivalent: "")
             title.isEnabled = false; menu.addItem(title)
-            menu.addItem(item(session.status == .running ? "Pause Focus" : "Resume Focus", session.status == .running ? #selector(pauseFocus) : #selector(resumeFocus)))
-            menu.addItem(item("End Focus", #selector(endFocus)))
+            menu.addItem(item(session.status == .running ? "Fokus pausieren" : "Fokus fortsetzen", session.status == .running ? #selector(pauseFocus) : #selector(resumeFocus)))
+            menu.addItem(item("Fokus beenden", #selector(endFocus)))
         }
         if let rest = focus.rest {
-            let r = NSMenuItem(title: "\(rest.title): \(FocusSession.clock(rest.remaining)) left", action: nil, keyEquivalent: "")
+            let r = NSMenuItem(title: "\(rest.title): noch \(FocusSession.clock(rest.remaining))", action: nil, keyEquivalent: "")
             r.isEnabled = false; menu.addItem(r)
-            menu.addItem(item("Skip Break", #selector(skipBreak)))
+            menu.addItem(item("Pause überspringen", #selector(skipBreak)))
         }
         menu.addItem(pomodoroMenu())
         menu.addItem(.separator())
 
         // Talking to him.
-        if settings.notchMode { menu.addItem(shortcutItem("Type to Bluey…", #selector(typeToBluey), .typeToBluey)) }
+        if settings.notchMode { menu.addItem(shortcutItem("Bluey schreiben …", #selector(typeToBluey), .typeToBluey)) }
         let listening = phones.isEmpty ? notch.isListening : host.awake
-        let wake = shortcutItem(listening ? "Stop Listening" : "Start Listening", #selector(toggleAwake), .wake)
+        let wake = shortcutItem(listening ? "Zuhören beenden" : "Zuhören starten", #selector(toggleAwake), .wake)
         wake.isEnabled = !phones.isEmpty || settings.notchMode
         menu.addItem(wake)
         menu.addItem(bridge.menuItem(target: self))
@@ -688,21 +1003,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 codexMenu.addItem(j)
             }
             if !codex.jobs.isEmpty { codexMenu.addItem(.separator()) }
-            codexMenu.addItem(item("Add Project Folder…", #selector(addCodexFolder)))
-            codexMenu.addItem(item("Open Codex", #selector(openCodex)))
-            menu.addItem(submenu(codex.approvals.isEmpty ? "Codex" : "Codex (waiting for you)", codexMenu))
+            codexMenu.addItem(item("Projektordner hinzufügen …", #selector(addCodexFolder)))
+            codexMenu.addItem(item("Codex öffnen", #selector(openCodex)))
+            menu.addItem(submenu(codex.approvals.isEmpty ? "Codex" : "Codex wartet auf dich", codexMenu))
         }
-        menu.addItem(shortcutItem("Quick Notes", #selector(toggleQuickNotes), .notes))
+        menu.addItem(shortcutItem("Schnellnotizen", #selector(toggleQuickNotes), .notes))
+        menu.addItem(shortcutItem(screenAnnotator.isVisible ? "Bildschirm-Zeichnen beenden" : "Auf Bildschirm zeichnen",
+                                  #selector(toggleScreenAnnotator), .annotateScreen))
+        menu.addItem(huionMenu())
         if #available(macOS 15, *), let meetings {
-            let title = meetings.recording ? "Call-Notizen · Aufnahme läuft …" : "Call-Notizen …"
+            let title = meetings.recording ? "Meeting-Aufnahmen · Aufnahme läuft …" : "Meeting-Aufnahmen …"
             menu.addItem(item(title, #selector(openMeetings)))
+            if meetings.recording {
+                menu.addItem(item("Meeting-Aufnahme stoppen", #selector(stopMeetingRecording)))
+            }
         }
-        menu.addItem(item("Open Meeting Notes", #selector(openNotes)))
+        menu.addItem(item("Aufnahmeordner öffnen", #selector(openNotes)))
         menu.addItem(.separator())
 
         // Control.
-        menu.addItem(shortcutItem(settings.hidden ? "Show Bluey" : "Hide Bluey", #selector(toggleHidden), .hide))
-        menu.addItem(shortcutItem("Stop Him", #selector(stopActions), .stop))
+        menu.addItem(shortcutItem(settings.hidden ? "Bluey einblenden" : "Bluey ausblenden", #selector(toggleHidden), .hide))
+        menu.addItem(shortcutItem("Aktionen stoppen", #selector(stopActions), .stop))
         let testMenu = NSMenu()
         for mood in KeramikTest.moods {
             let m = NSMenuItem(title: mood.title, action: #selector(testAvatarMood(_:)), keyEquivalent: "")
@@ -714,12 +1035,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let r = NSMenuItem(title: reaction.title, action: #selector(testAvatarReaction(_:)), keyEquivalent: "")
             r.target = self; r.representedObject = reaction.id; testMenu.addItem(r)
         }
-        menu.addItem(submenu("Test Avatar", testMenu))
+        menu.addItem(submenu("Avatar testen", testMenu))
         menu.addItem(.separator())
-        let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        let prefs = NSMenuItem(title: "Einstellungen …", action: #selector(openSettings), keyEquivalent: ",")
         prefs.target = self
         menu.addItem(prefs)
-        menu.addItem(NSMenuItem(title: "Quit Bluey", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Bluey beenden", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
     /// A menu item that shows the action's current global shortcut.
@@ -735,10 +1056,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let model = SettingsModel(focus: focus, hermes: bridge.hermes)
         model.journal = bridge.journal
         model.sendHubToPhone = { [weak self] in
-            guard let self, let hub = HubSettings.phonePayload else { return "Add the hub address first." }
-            guard !self.server.phoneNames.isEmpty else { return "No phone connected right now; it gets the address next time it connects." }
+            guard let self, let hub = HubSettings.phonePayload else { return "Hinterlege zuerst die Hub-Adresse." }
+            guard !self.server.phoneNames.isEmpty else { return "Das iPhone erhält die Adresse bei der nächsten Verbindung." }
             self.server.broadcast(Packet(command: "hubConfig", text: hub))
-            return "Sent to \(self.server.phoneNames.joined(separator: ", "))."
+            return "Gesendet an \(self.server.phoneNames.joined(separator: ", "))."
         }
         model.applyNotchMode = { [weak self] in self?.applyNotchMode() }
         model.setAvatarWindow = { [weak self] on in
@@ -764,6 +1085,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func openSettings() { settingsWindow.show() }
     @objc private func toggleQuickNotes() { quickNotes.toggle() }
+    @objc private func toggleScreenAnnotator() { screenAnnotator.toggle() }
+    @objc private func openHuionNotesTab() { workspaceWindow.show(tab: .notes) }
+    @objc private func syncHuionOffline() { huion.syncOfflinePages(pin: nil) }
+    @objc private func toggleHuionBLE() { if huion.bleState.isConnected { huion.disconnectBLE() } else { huion.connectBLE() } }
+    @objc private func startHuionBLELivePen() { huion.startBLELivePen() }
+    @objc private func toggleStandaloneVideoTimer() {
+        standaloneVideoTimerStartedAt = (standaloneVideoTimerStartedAt == nil) ? Date() : nil
+        syncRecordingClock()
+    }
+    @objc private func openHuionArchive() {
+        try? FileManager.default.createDirectory(at: HuionArchive.folder, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(HuionArchive.folder)
+    }
+
+    private func huionMenu() -> NSMenuItem {
+        let menu = NSMenu()
+        let stateItem = NSMenuItem(title: huion.statusHeadline, action: nil, keyEquivalent: "")
+        stateItem.isEnabled = false
+        menu.addItem(stateItem)
+        if let msg = huion.syncSummary, !msg.isEmpty {
+            let m = NSMenuItem(title: msg, action: nil, keyEquivalent: "")
+            m.isEnabled = false
+            menu.addItem(m)
+        }
+        menu.addItem(.separator())
+        menu.addItem(item("Notizen mit Stift öffnen…", #selector(openHuionNotesTab)))
+        menu.addItem(item(standaloneVideoTimerStartedAt != nil ? "Video-Zeitstempel stoppen" : "Video-Zeitstempel starten",
+                          #selector(toggleStandaloneVideoTimer)))
+        menu.addItem(item("Offline-Seiten synchronisieren (BLE)", #selector(syncHuionOffline)))
+        menu.addItem(item(huion.bleState.isConnected ? "Bluetooth trennen" : "Per Bluetooth verbinden", #selector(toggleHuionBLE)))
+        if huion.bleState.isConnected {
+            menu.addItem(item("BLE Live-Stift aktivieren", #selector(startHuionBLELivePen)))
+        }
+        menu.addItem(.separator())
+        menu.addItem(item("Huion-Exportordner öffnen", #selector(openHuionArchive)))
+        return submenu(huion.isAnyDeviceConnected ? "Huion Note ✓" : "Huion Note", menu)
+    }
 
     /// Menu item that shows its global shortcut (⌃⌥ + key) when given one.
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {

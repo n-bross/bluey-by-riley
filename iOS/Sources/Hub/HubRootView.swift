@@ -8,9 +8,9 @@ struct HubRootView: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .threads: return "Threads"
+            case .threads: return "Chats"
             case .todos: return "Todos"
-            case .notes: return "Notes"
+            case .notes: return "Notizen"
             case .browser: return "Browser"
             }
         }
@@ -52,6 +52,8 @@ struct HubRootView: View {
             }
         }
         .background(T3.screen.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .tint(Theme.accentLight)
         .sheet(isPresented: $settings) { HubSettingsView(hub: hub) }
         .onAppear {
             OrientationLock.set(.portrait)
@@ -77,7 +79,7 @@ struct HubRootView: View {
                     Text("Bluey").t3Text(.lg, .bold, color: T3.drawerForeground)
                     HStack(spacing: 5) {
                         Circle().fill(hub.online ? T3.success : T3.drawerForegroundMuted).frame(width: 6, height: 6)
-                        Text(hub.online ? "Hub connected" : (hub.config == nil ? "Not set up" : "Offline"))
+                        Text(hub.online ? "Hub verbunden" : (hub.config == nil ? "Nicht eingerichtet" : "Offline"))
                             .t3Text(.xs2, color: T3.drawerForegroundMuted)
                     }
                 }
@@ -108,11 +110,11 @@ struct HubRootView: View {
 
             Rectangle().fill(T3.drawerBorder).frame(height: 1).padding(.vertical, 12)
 
-            drawerRow("Back to Bluey", "arrow.uturn.backward") {
+            drawerRow("Zu Bluey", "arrow.uturn.backward") {
                 drawer = false
                 openBluey()
             }
-            drawerRow("Settings", "gearshape") { drawer = false; settings = true }
+            drawerRow("Einstellungen", "gearshape") { drawer = false; settings = true }
             Spacer()
         }
         .frame(width: 290)
@@ -163,7 +165,7 @@ struct T3Header<Trailing: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                T3IconButton(symbol: "sidebar.left", label: "Menu", action: openDrawer)
+                T3IconButton(symbol: "sidebar.left", label: "Menü", action: openDrawer)
                 Spacer()
                 trailing
             }
@@ -185,7 +187,7 @@ struct T3IconButton: View {
             Image(systemName: symbol)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(prominent ? T3.primaryForeground : T3.icon)
-                .frame(width: 38, height: 38)
+                .frame(width: 44, height: 44)
                 .background(Circle().fill(prominent ? T3.primary : T3.subtle))
                 .overlay(Circle().stroke(prominent ? Color.clear : T3.border, lineWidth: 1))
         }
@@ -215,11 +217,11 @@ struct T3SearchField: View {
     }
 }
 
-/// Relative time like T3's list ("now", "5m", "3h", "Tue", "12 Nov").
+/// Relative time like T3's list ("jetzt", "5m", "3h", "Tue", "12 Nov").
 enum T3Time {
     static func short(_ date: Date) -> String {
         let s = Date().timeIntervalSince(date)
-        if s < 60 { return "now" }
+        if s < 60 { return "jetzt" }
         if s < 3600 { return "\(Int(s / 60))m" }
         if s < 86400 { return "\(Int(s / 3600))h" }
         if s < 6 * 86400 { return date.formatted(.dateTime.weekday(.abbreviated)) }
