@@ -50,6 +50,8 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
     @ObservedObject var model: WorkspaceModel
     @Binding var tab: WorkspaceTab
     var connectionName: String?
+    /// Optional Mac-only action to jump directly to the Call-Notizen window.
+    var openMeetings: (() -> Void)? = nil
     /// The face tab in the Mac sidebar.
     @ViewBuilder var face: () -> Face
     @ViewBuilder var settings: () -> Settings
@@ -150,6 +152,12 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
                 .accessibilityAddTraits(tab == item ? .isSelected : [])
             }
             Spacer()
+            if let openMeetings {
+                Button(action: openMeetings) {
+                    Image(systemName: "waveform.and.mic").frame(width: 32, height: 30)
+                }
+                .help("Call-Notizen öffnen (⌃⌥M)").accessibilityLabel("Call-Notizen öffnen")
+            }
             Button(action: openSettings) {
                 Image(systemName: "gearshape").frame(width: 32, height: 30)
             }

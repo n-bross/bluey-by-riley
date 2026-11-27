@@ -97,6 +97,7 @@ enum JournalBuilder {
 @MainActor
 final class ActivityJournal {
     var focusHistory: () -> [FocusSession] = { [] }
+    var meetingsHistory: () -> [MeetingTimeSummaryEntry] = { [] }
     var hermes: HermesGateway?
     private var lastWrite = Date.distantPast
     private var sending = false
@@ -177,6 +178,18 @@ final class ActivityJournal {
                 let end = s.startedAt.addingTimeInterval(s.realActiveElapsed)
                 let aw = s.activity.map { " · ActivityWatch active \(ActivitySummary.duration($0.activeSeconds))" } ?? ""
                 lines.append("- \(Self.time(s.startedAt))–\(Self.time(end)) “\(s.task)” · \(ActivitySummary.duration(s.realActiveElapsed))\(onTask)\(aw)")
+            }
+        }
+
+        let meetings = meetingsHistory().filter { $0.started >= windowStart && $0.started < windowEnd }.sorted { $0.started < $1.started }
+        if !meetings.isEmpty {
+            let totalMeetingTime = meetings.reduce(0) { $0 + $1.duration }
+            lines.append("\n## Meetings (\(MeetingDurationFormatter.human(totalMeetingTime)))")
+            for m in meetings {
+                let end = m.ended ?? m.started.addingTimeInterval(m.duration)
+                let tasksPart = m.taskCount > 0 ? " · \(m.taskCount) Aufgaben" : ""
+                let t3Part = m.sentToT3Count > 0 ? " (\(m.sentToT3Count) an T3 Code)" : ""
+                lines.append("- \(Self.time(m.started))–\(Self.time(end)) “\(m.title)” · \(MeetingDurationFormatter.human(m.duration))\(tasksPart)\(t3Part)")
             }
         }
 

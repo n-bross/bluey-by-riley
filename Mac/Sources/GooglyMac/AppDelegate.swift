@@ -22,27 +22,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var standaloneVideoTimerStartedAt: Date?
     private lazy var meetingWindow: Any? = {
         if #available(macOS 15, *) {
-            let m = MeetingWindow()
-            m.onRecordingStateChanged = { [weak self] recording, startedAt in
+            let window = MeetingWindow()
+            window.onRecordingStateChanged = { [weak self] recording, startedAt in
                 guard let self else { return }
                 self.meetingRecordingStartedAt = recording ? startedAt : nil
                 self.syncRecordingClock()
             }
-            m.onOpenNote = { [weak self] noteID in
+            window.onOpenNote = { [weak self] noteID in
                 guard let self else { return }
                 self.workspaceWindow.model.huion.pendingSelectNoteID = noteID
                 self.workspaceWindow.show(tab: .notes)
             }
-            m.onNewInkNote = { [weak self] in
+            window.onNewInkNote = { [weak self] in
                 guard let self else { return }
                 let id = self.workspaceWindow.model.addNote(drawing: InkDrawing(), source: "huion-live")
                 self.workspaceWindow.model.huion.pendingSelectNoteID = id
                 self.workspaceWindow.show(tab: .notes)
             }
-            m.onOpenScreenAnnotator = { [weak self] in
+            window.onOpenScreenAnnotator = { [weak self] in
                 self?.screenAnnotator.show()
             }
-            return m
+            window.addWorkspaceTodo = { [weak self] title, notes in
+                guard let self else { return }
+                var partial = WorkspaceSnapshot()
+                partial.todos = [TodoItem(title: title, notes: notes)]
+                self.workspace.apply(partial)
+            }
+            window.addWorkspaceNote = { [weak self] title, body in
+                guard let self else { return }
+                var partial = WorkspaceSnapshot()
+                partial.notes = [NoteItem(title: title, body: body)]
+                self.workspace.apply(partial)
+            }
+            return window
         }
         return nil
     }()
@@ -126,6 +138,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         focus.startService()
         bridge.start()
+        bridge.journal.meetingsHistory = { [weak self] in
+            if #available(macOS 15, *) { return self?.meetings?.allTimeSummaries ?? [] }
+            return []
+        }
         bridge.onHermesChange = { [weak self] in
             guard let self else { return }
             self.notch.refreshHermes()
@@ -231,6 +247,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         workspaceWindow.phoneName = { [weak self] in self?.server.phoneNames.first }
         workspaceWindow.openWebApp = { [weak self] in self?.openWebApp() }
         workspaceWindow.pairPhone = { [weak self] in self?.pairingPanel.show() }
+        if #available(macOS 15, *) {
+            workspaceWindow.openMeetings = { [weak self] in self?.openMeetings() }
+        }
         workspaceWindow.model.focusCommand = { [weak self] command, task, minutes in
             self?.runFocusCommand(command, ["task": task, "minutes": minutes]) ?? ""
         }
@@ -546,14 +565,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if #available(macOS 15, *), let meetings, meetings.recording || meetings.changingCapture {
-            Task {
-                await meetings.stop()
-                while meetings.changingCapture { try? await Task.sleep(for: .milliseconds(50)) }
-                await meetings.stop()
-                sender.reply(toApplicationShouldTerminate: true)
+        if #available(macOS 15, *), let meetings {
+            if meetings.recording || meetings.changingCapture {
+                Task {
+                    await meetings.stop()
+                    while meetings.changingCapture { try? await Task.sleep(for: .milliseconds(50)) }
+                    await meetings.stop()
+                    sender.reply(toApplicationShouldTerminate: true)
+                }
+                return .terminateLater
+            } else if meetings.isTrackingTime {
+                meetings.finishTimer()
             }
-            return .terminateLater
         }
         return .terminateNow
     }
@@ -654,6 +677,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .stopPointing: overlay.goHome()
         case .notes: quickNotes.toggle()
         case .annotateScreen: screenAnnotator.toggle()
+        case .meetingNotes: openMeetings()
+        case .meetingRecord: toggleMeetingRecording()
+        case .meetingToT3: openMeetingToT3()
         }
     }
 
@@ -881,14 +907,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if #available(macOS 15, *) { meetings?.show() }
     }
 
-    @objc private func stopMeetingRecording() {
+    @objc private func toggleMeetingRecording() {
         if #available(macOS 15, *), let meetings {
-            Task { await meetings.stop() }
+            meetings.show()
+            Task { await meetings.toggleRecording() }
         }
     }
 
+    @objc private func openMeetingToT3() {
+        if #available(macOS 15, *) { meetings?.show(openT3Composer: true) }
+    }
+
     @objc private func openNotes() {
-        try? FileManager.default.createDirectory(at: MeetingNotes.root, withIntermediateDirectories: true)
+        MeetingNotes.ensureLibraryFolders()
         NSWorkspace.shared.open(MeetingNotes.root)
     }
 
@@ -1015,13 +1046,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                   #selector(toggleScreenAnnotator), .annotateScreen))
         menu.addItem(huionMenu())
         if #available(macOS 15, *), let meetings {
-            let title = meetings.recording ? "Meeting-Aufnahmen · Aufnahme läuft …" : "Meeting-Aufnahmen …"
-            menu.addItem(item(title, #selector(openMeetings)))
-            if meetings.recording {
-                menu.addItem(item("Meeting-Aufnahme stoppen", #selector(stopMeetingRecording)))
+            let openTitle: String
+            if let badge = meetings.activeTimerBadgeText {
+                openTitle = meetings.recording ? "Call-Notizen · Aufnahme (\(badge))" : "Call-Notizen · Timer (\(badge))"
+            } else {
+                openTitle = "Call-Notizen öffnen…"
             }
+            menu.addItem(shortcutItem(openTitle, #selector(openMeetings), .meetingNotes))
+            menu.addItem(shortcutItem(meetings.recording ? "Meeting-Aufnahme stoppen" : "Meeting-Aufnahme starten",
+                                      #selector(toggleMeetingRecording), .meetingRecord))
+            menu.addItem(shortcutItem("Meeting-Aufgabe an T3 Code…", #selector(openMeetingToT3), .meetingToT3))
         }
-        menu.addItem(item("Aufnahmeordner öffnen", #selector(openNotes)))
+        menu.addItem(item("Notizen- & Nachrichten-Ordner öffnen", #selector(openNotes)))
         menu.addItem(.separator())
 
         // Control.
