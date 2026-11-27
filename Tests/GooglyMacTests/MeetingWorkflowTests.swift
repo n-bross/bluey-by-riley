@@ -24,8 +24,37 @@ final class MeetingWorkflowTests: XCTestCase {
         XCTAssertEqual(decoded.displayTitle, "Microsoft Teams · KI Verantworten")
         XCTAssertEqual(decoded.manualNotes, "")
         XCTAssertTrue(decoded.tasks.isEmpty)
+        XCTAssertEqual(decoded.screenshots.map(\.filename), ["slide-001.jpg"])
         XCTAssertEqual(decoded.trackedDuration(), 3600 + 24 * 60, accuracy: 0.5)
         XCTAssertFalse(decoded.isTimerRunning)
+    }
+
+    @available(macOS 15, *)
+    func testVisualRecordingRoundTripsWithMeetingWorkflowAndExportsLinks() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("bluey-visual-test-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let start = Date(timeIntervalSince1970: 1_764_150_000)
+        let shot = MeetingAudio.Screenshot(filename: "screenshots/slide.jpg", captured: start.addingTimeInterval(30), manual: true)
+        let drawing = MeetingDrawingEvent(timestamp: start.addingTimeInterval(45), videoOffsetSeconds: 45,
+                                   source: "Bildschirm", svgFilename: "screen.svg", pngFilename: "screen.png",
+                                   strokeCount: 3, ocrText: "Skizze")
+        let session = MeetingSession(title: "Planung", captureTargetName: "Teams", started: start,
+                                     ended: start.addingTimeInterval(60), drawings: [drawing], screenshots: [shot],
+                                     videoFilename: "video.mp4", manualNotes: "Eigene Notizen zur Planung",
+                                     tasks: [MeetingTask(title: "Skizze prüfen")])
+        let decoded = try JSONDecoder().decode(MeetingSession.self, from: JSONEncoder().encode(session))
+        XCTAssertEqual(decoded.videoFilename, "video.mp4")
+        XCTAssertEqual(decoded.drawings, [drawing])
+        XCTAssertEqual(decoded.screenshots, [shot])
+        XCTAssertEqual(decoded.tasks, session.tasks)
+        XCTAssertTrue(decoded.transcript.contains("Skizze"))
+        MeetingNotes.exportSessionFiles(decoded, in: root)
+        let folder = MeetingNotes.folder(session: decoded.id.uuidString, started: decoded.started, in: root)
+        let notes = try String(contentsOf: folder.appendingPathComponent("notes.md"), encoding: .utf8)
+        for expected in ["video.mp4", "screenshots/slide.jpg", "drawings/screen.svg", "drawings/screen.png",
+                         "Eigene Notizen zur Planung", "Skizze prüfen"] {
+            XCTAssertTrue(notes.contains(expected), "Missing \(expected)")
+        }
     }
 
     @available(macOS 15, *)

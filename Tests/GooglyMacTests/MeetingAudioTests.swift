@@ -120,7 +120,7 @@ final class MeetingAudioTests: XCTestCase {
     @MainActor
     func testLegacySessionJSONDecodesWithoutVisualFields() throws {
         let legacy = #"{"id":"01390EA9-E832-4AE0-B502-28D4F88144EA","started":817198725.96,"clips":[],"messages":[]}"#
-        let decoded = try JSONDecoder().decode(MeetingWindow.Session.self, from: Data(legacy.utf8))
+        let decoded = try JSONDecoder().decode(MeetingSession.self, from: Data(legacy.utf8))
         XCTAssertEqual(decoded.screenshots, [])
         XCTAssertNil(decoded.videoFilename)
         XCTAssertNil(decoded.captureTargetName)
@@ -128,11 +128,11 @@ final class MeetingAudioTests: XCTestCase {
 
     @MainActor
     func testSessionRoundTripsDrawingsAndScreenshotsTogether() throws {
-        let drawing = MeetingWindow.DrawingEvent(videoOffsetSeconds: 12, source: "Notiz", svgFilename: "note.svg", strokeCount: 1)
+        let drawing = MeetingDrawingEvent(videoOffsetSeconds: 12, source: "Notiz", svgFilename: "note.svg", strokeCount: 1)
         let shot = MeetingAudio.Screenshot(filename: "slide.jpg", captured: Date(), manual: false)
-        let session = MeetingWindow.Session(drawings: [drawing], screenshots: [shot], videoFilename: "video.mp4")
+        let session = MeetingSession(drawings: [drawing], screenshots: [shot], videoFilename: "video.mp4")
 
-        let decoded = try JSONDecoder().decode(MeetingWindow.Session.self, from: JSONEncoder().encode(session))
+        let decoded = try JSONDecoder().decode(MeetingSession.self, from: JSONEncoder().encode(session))
 
         XCTAssertEqual(decoded.drawings, [drawing])
         XCTAssertEqual(decoded.screenshots, [shot])

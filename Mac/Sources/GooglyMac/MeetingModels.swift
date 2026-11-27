@@ -338,7 +338,12 @@ struct MeetingSession: Codable, Identifiable {
         clips = try c.decodeIfPresent([MeetingAudio.Clip].self, forKey: .clips) ?? []
         messages = try c.decodeIfPresent([ChatMessage].self, forKey: .messages) ?? []
         drawings = (try? c.decodeIfPresent([MeetingDrawingEvent].self, forKey: .drawings)) ?? []
-        screenshots = (try? c.decodeIfPresent([MeetingAudio.Screenshot].self, forKey: .screenshots)) ?? []
+        if let filenames = try? c.decode([String].self, forKey: .screenshots) {
+            let captureStart = started
+            screenshots = filenames.map { MeetingAudio.Screenshot(filename: $0, captured: captureStart, manual: false) }
+        } else {
+            screenshots = (try? c.decode([MeetingAudio.Screenshot].self, forKey: .screenshots)) ?? []
+        }
         videoFilename = try c.decodeIfPresent(String.self, forKey: .videoFilename)
         manualNotes = try c.decodeIfPresent(String.self, forKey: .manualNotes) ?? ""
         tasks = try c.decodeIfPresent([MeetingTask].self, forKey: .tasks) ?? []
@@ -373,15 +378,13 @@ struct MeetingSession: Codable, Identifiable {
 
     var transcript: String {
         var rows: [(Date, String)] = transcriptClips.map { clip in
-            let text = clip.transcript ?? ""
+            let offset = InkDrawing.formatVideoTime(max(0, clip.started.timeIntervalSince(started)))
             let time = clip.started.formatted(date: .omitted, time: .standard)
-            return (clip.started, "[\(time)] \(clip.source.title): \(text)")
+            return (clip.started, "[\(offset) · \(time)] \(clip.source.title): \(clip.transcript ?? "")")
         }
-        if !drawings.isEmpty {
-            rows += drawings.map { d in
-                let detail = (d.ocrText?.isEmpty == false ? d.ocrText! : "\(d.strokeCount) Striche (\(d.svgFilename))")
-                return (d.timestamp, "[\(d.timecode)] Zeichnung (\(d.source)): \(detail)")
-            }
+        rows += drawings.map { drawing in
+            let detail = drawing.ocrText.flatMap { $0.isEmpty ? nil : $0 } ?? "\(drawing.strokeCount) Striche (\(drawing.svgFilename))"
+            return (drawing.timestamp, "[\(drawing.timecode)] Zeichnung (\(drawing.source)): \(detail)")
         }
         return rows.sorted { $0.0 < $1.0 }.map(\.1).joined(separator: "\n\n")
     }

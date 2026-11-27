@@ -22,39 +22,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var standaloneVideoTimerStartedAt: Date?
     private lazy var meetingWindow: Any? = {
         if #available(macOS 15, *) {
-            let m = MeetingWindow()
-            m.onRecordingStateChanged = { [weak self] recording, startedAt in
+            let window = MeetingWindow()
+            window.onRecordingStateChanged = { [weak self] recording, startedAt in
                 guard let self else { return }
                 self.meetingRecordingStartedAt = recording ? startedAt : nil
                 self.syncRecordingClock()
             }
-            m.onOpenNote = { [weak self] noteID in
+            window.onOpenNote = { [weak self] noteID in
                 guard let self else { return }
                 self.workspaceWindow.model.huion.pendingSelectNoteID = noteID
                 self.workspaceWindow.show(tab: .notes)
             }
-            m.onNewInkNote = { [weak self] in
+            window.onNewInkNote = { [weak self] in
                 guard let self else { return }
                 let id = self.workspaceWindow.model.addNote(drawing: InkDrawing(), source: "huion-live")
                 self.workspaceWindow.model.huion.pendingSelectNoteID = id
                 self.workspaceWindow.show(tab: .notes)
             }
-            m.onOpenScreenAnnotator = { [weak self] in
+            window.onOpenScreenAnnotator = { [weak self] in
                 self?.screenAnnotator.show()
             }
-            m.addWorkspaceTodo = { [weak self] title, notes in
+            window.addWorkspaceTodo = { [weak self] title, notes in
                 guard let self else { return }
                 var partial = WorkspaceSnapshot()
                 partial.todos = [TodoItem(title: title, notes: notes)]
                 self.workspace.apply(partial)
             }
-            m.addWorkspaceNote = { [weak self] title, body in
+            window.addWorkspaceNote = { [weak self] title, body in
                 guard let self else { return }
                 var partial = WorkspaceSnapshot()
                 partial.notes = [NoteItem(title: title, body: body)]
                 self.workspace.apply(partial)
             }
-            return m
+            return window
         }
         return nil
     }()
@@ -902,12 +902,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func openMeetings() {
         if #available(macOS 15, *) { meetings?.show() }
-    }
-
-    @objc private func stopMeetingRecording() {
-        if #available(macOS 15, *), let meetings {
-            Task { await meetings.stop() }
-        }
     }
 
     @objc private func toggleMeetingRecording() {

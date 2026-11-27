@@ -1,5 +1,6 @@
 import AppKit
 import Charts
+import CoreGraphics
 import GooglyShared
 import SwiftUI
 
@@ -113,7 +114,7 @@ final class MeetingWindow: ObservableObject {
     @Published var selectedTarget: MeetingAudio.CaptureTarget = .display
     @Published private(set) var availableTargets: [MeetingAudio.CaptureTarget] = [.display]
 
-    var busy: Bool { recording || changingCapture || transcribing || answering }
+    var busy: Bool { recording || changingCapture || transcribing || answering || extractingTasks || sendingToT3 }
     var isTrackingTime: Bool { recording || session?.isTimerRunning == true }
 
     var activeTimerBadgeText: String? {
@@ -208,8 +209,8 @@ final class MeetingWindow: ObservableObject {
         if let preferWindowID,
            let matched = targets.first(where: { $0.windowID == preferWindowID }) {
             selectedTarget = matched
-        } else if !targets.contains(selectedTarget) {
-            selectedTarget = .display
+        } else {
+            selectedTarget = targets.first { $0.id == selectedTarget.id } ?? .display
         }
     }
 
@@ -290,8 +291,8 @@ final class MeetingWindow: ObservableObject {
     // MARK: Session lifecycle & time tracking
 
     func select(_ target: Session?) {
-        guard !recording && !changingCapture else {
-            showToast("Stoppe zuerst die laufende Aufnahme, um das Meeting zu wechseln.", isError: true)
+        guard !busy else {
+            showToast(recording ? "Stoppe zuerst die laufende Aufnahme." : "Warte, bis der laufende Vorgang abgeschlossen ist.", isError: true)
             return
         }
         flushPendingNoteSave()
@@ -318,7 +319,7 @@ final class MeetingWindow: ObservableObject {
 
     /// Starts a new meeting with time tracking + notes without audio capture.
     func startNewTimedMeeting(title: String = "") {
-        guard !recording && !changingCapture else { return }
+        guard !busy else { return }
         flushPendingNoteSave()
         if session?.isTimerRunning == true {
             session?.pauseTimer()
@@ -362,7 +363,7 @@ final class MeetingWindow: ObservableObject {
     }
 
     func finishTimer() {
-        guard !recording, session != nil else { return }
+        guard !recording, !changingCapture, session != nil else { return }
         let timestamp = Date()
         session?.finishTimer(at: timestamp)
         now = timestamp
@@ -372,21 +373,17 @@ final class MeetingWindow: ObservableObject {
     }
 
     func start(preferredWindowID: CGWindowID? = nil) async {
-        guard !recording && !changingCapture else { return }
+        guard !busy else { return }
         if let problem = TranscriptionService.readinessError() {
             error = problem
             return
         }
         flushPendingNoteSave()
-        if session?.isTimerRunning == true {
-            session?.pauseTimer()
-            save()
-        }
         changingCapture = true
         error = nil
         visualWarning = nil
         status = "Aufnahme wird gestartet …"
-        if preferredWindowID != nil {
+        if let preferredWindowID {
             await refreshTargets(preferWindowID: preferredWindowID)
         }
         let start = Date()
@@ -426,9 +423,14 @@ final class MeetingWindow: ObservableObject {
         )
         do {
             try await recorder.start()
+            if session?.isTimerRunning == true {
+                session?.pauseTimer(at: start)
+                save()
+            }
             var activeSession = newSession
-            activeSession.captureTargetName = visual.enabled ? (recorder.resolvedTargetName ?? selectedTarget.displayName) : nil
-            self.session = activeSession
+            activeSession.captureTargetName = visual.enabled ? (recorder.resolvedTargetName ?? visual.target.displayName) : nil
+            session = activeSession
+            centerTab = .transcript
             failedClips.removeAll()
             lastSpeechDetected = Date()
             self.recorder = recorder
@@ -456,10 +458,12 @@ final class MeetingWindow: ObservableObject {
     }
 
     func takeScreenshot() async {
-        guard recording, let recorder, !takingScreenshot else { return }
+        guard recording, let recorder, let sessionID = session?.id, !takingScreenshot else { return }
         takingScreenshot = true
         defer { takingScreenshot = false }
-        if let shot = await recorder.captureManualScreenshot() {
+        let shot = await recorder.captureManualScreenshot()
+        guard session?.id == sessionID else { return }
+        if let shot {
             session?.screenshots.append(shot)
             save()
             showToast("Screenshot gespeichert")
@@ -1109,8 +1113,8 @@ final class MeetingWindow: ObservableObject {
     }
 
     func deleteSession(_ target: Session) {
-        guard !(recording && session?.id == target.id) else {
-            showToast("Stoppe zuerst die laufende Aufnahme.", isError: true)
+        guard !busy || session?.id != target.id else {
+            showToast(recording ? "Stoppe zuerst die laufende Aufnahme." : "Warte, bis der laufende Vorgang abgeschlossen ist.", isError: true)
             return
         }
         try? FileManager.default.trashItem(at: target.folder, resultingItemURL: nil)
@@ -1246,6 +1250,7 @@ private struct MeetingView: View {
     @State private var titleDraft = ""
     @State private var notesDraft = ""
     @State private var loadedSessionID: UUID?
+    @State private var showCaptureSettings = false
 
     @FocusState private var questionFocused: Bool
     @FocusState private var taskInputFocused: Bool
@@ -1414,109 +1419,27 @@ private struct MeetingView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .disabled(model.changingCapture)
+                .disabled(model.changingCapture || (!model.recording && model.busy))
 
-                if model.recording {
+                Button {
+                    model.startNewTimedMeeting()
+                } label: {
                     HStack(spacing: 6) {
-                        Button {
-                            Task { await model.takeScreenshot() }
-                        } label: {
-                            Label("Shot", systemImage: "camera")
-                                .font(.plexSans(11).weight(.medium))
-                                .foregroundStyle(MeetingStyle.ink)
-                                .frame(maxWidth: .infinity, minHeight: 28)
-                                .background(MeetingStyle.surface, in: RoundedRectangle(cornerRadius: 7))
-                                .overlay(RoundedRectangle(cornerRadius: 7).stroke(MeetingStyle.border))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.takingScreenshot)
-                        .help("Screenshot speichern")
-
-                        Button { model.onNewInkNote?() } label: {
-                            Label("Stift", systemImage: "pencil.and.scribble")
-                                .font(.plexSans(11).weight(.medium))
-                                .foregroundStyle(MeetingStyle.ink)
-                                .frame(maxWidth: .infinity, minHeight: 28)
-                                .background(MeetingStyle.surface, in: RoundedRectangle(cornerRadius: 7))
-                                .overlay(RoundedRectangle(cornerRadius: 7).stroke(MeetingStyle.border))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Neue Stift-Notiz im Video")
-
-                        Button { model.onOpenScreenAnnotator?() } label: {
-                            Label("Screen", systemImage: "scribble.variable")
-                                .font(.plexSans(11).weight(.medium))
-                                .foregroundStyle(MeetingStyle.ink)
-                                .frame(maxWidth: .infinity, minHeight: 28)
-                                .background(MeetingStyle.surface, in: RoundedRectangle(cornerRadius: 7))
-                                .overlay(RoundedRectangle(cornerRadius: 7).stroke(MeetingStyle.border))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Auf Bildschirm zeichnen")
+                        Image(systemName: "stopwatch")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Neues Meeting (nur Zeit)")
+                            .font(.plexSans(12).weight(.medium))
+                        Spacer()
+                        ShortcutPill("⌘N")
                     }
-                } else {
-                    Button {
-                        model.startNewTimedMeeting()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "stopwatch")
-                                .font(.system(size: 12, weight: .medium))
-                            Text("Neues Meeting (nur Zeit)")
-                                .font(.plexSans(12).weight(.medium))
-                            Spacer()
-                            ShortcutPill("⌘N")
-                        }
-                        .foregroundStyle(MeetingStyle.ink)
-                        .padding(.horizontal, 10)
-                        .frame(height: 32)
-                        .background(MeetingStyle.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(MeetingStyle.border))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(model.recording || model.changingCapture)
-
-                    // Compact Video / Screenshots / STT Provider options
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 10) {
-                            Toggle("Video", isOn: $model.recordVideo)
-                                .toggleStyle(.checkbox)
-                                .font(.plexSans(11))
-                            Toggle("Folien", isOn: $model.autoScreenshots)
-                                .toggleStyle(.checkbox)
-                                .font(.plexSans(11))
-                            Spacer()
-                            Text(Settings.shared.transcriptionProvider.shortBadge)
-                                .font(.plexMono(9.5))
-                                .foregroundStyle(Theme.accentLight)
-                                .lineLimit(1)
-                        }
-                        if model.recordVideo || model.autoScreenshots {
-                            HStack(spacing: 4) {
-                                Picker("Bildquelle", selection: $model.selectedTarget) {
-                                    ForEach(model.availableTargets) { target in
-                                        Text(target.displayName).tag(target)
-                                    }
-                                }
-                                .labelsHidden()
-                                .controlSize(.small)
-                                Button {
-                                    Task { await model.refreshTargets() }
-                                } label: {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(MeetingStyle.inkMuted)
-                                        .frame(width: 22, height: 22)
-                                        .background(MeetingStyle.surfaceRaised, in: RoundedRectangle(cornerRadius: 5))
-                                }
-                                .buttonStyle(.plain)
-                                .help("Fensterliste aktualisieren")
-                            }
-                        }
-                    }
-                    .padding(8)
-                    .background(MeetingStyle.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .foregroundStyle(MeetingStyle.ink)
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .background(MeetingStyle.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(MeetingStyle.border))
                 }
+                .buttonStyle(.plain)
+                .disabled(model.busy)
             }
 
             // Compact Time Tracking Card
@@ -1702,6 +1625,8 @@ private struct MeetingView: View {
         VStack(alignment: .leading, spacing: 0) {
             centerHeader
             Divider().overlay(MeetingStyle.border)
+            captureControls
+            Divider().overlay(MeetingStyle.border)
 
             if !model.status.isEmpty || model.transcribing || model.visualWarning != nil || model.error != nil {
                 statusStrip
@@ -1722,6 +1647,78 @@ private struct MeetingView: View {
             }
         }
         .background(MeetingStyle.canvas)
+    }
+
+    private var captureControls: some View {
+        HStack(spacing: 10) {
+            if !model.showSidebar {
+                Button(model.recording ? "Aufnahme stoppen" : "Aufnahme starten",
+                       systemImage: model.recording ? "stop.fill" : "record.circle") {
+                    Task { await model.toggleRecording() }
+                }
+                .disabled(model.changingCapture || (!model.recording && model.busy))
+            }
+            if model.recording {
+                ViewThatFits(in: .horizontal) {
+                    recordingActions
+                    recordingActions.labelStyle(.iconOnly)
+                }
+            } else {
+                Button("Aufnahmeoptionen", systemImage: "slider.horizontal.3") { showCaptureSettings.toggle() }
+                    .disabled(model.changingCapture)
+                    .popover(isPresented: $showCaptureSettings) {
+                        captureSettings
+                    }
+                Text(Settings.shared.transcriptionProvider.shortBadge)
+                    .font(.plexMono(10))
+                    .foregroundStyle(Theme.accentLight)
+                    .help("Transkriptionsanbieter")
+                Text(model.recordVideo ? "Mit Bildschirmvideo" : (model.autoScreenshots ? "Mit Folien-Screenshots" : "Nur Audio"))
+                    .font(.plexSans(11))
+                    .foregroundStyle(MeetingStyle.inkMuted)
+            }
+            Spacer(minLength: 0)
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+    }
+
+    private var recordingActions: some View {
+        HStack(spacing: 10) {
+            Button("Screenshot", systemImage: "camera") { Task { await model.takeScreenshot() } }
+                .disabled(model.takingScreenshot)
+                .help("Screenshot speichern")
+            Button("Stift-Notiz", systemImage: "pencil.and.scribble") { model.onNewInkNote?() }
+                .help("Stift-Notiz öffnen")
+            Button("Bildschirm markieren", systemImage: "scribble.variable") { model.onOpenScreenAnnotator?() }
+                .help("Bildschirm markieren")
+        }
+    }
+
+    private var captureSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Bildschirmvideo aufnehmen", isOn: $model.recordVideo)
+            Toggle("Folien-Screenshots speichern", isOn: $model.autoScreenshots)
+            HStack {
+                Picker("Bildquelle", selection: $model.selectedTarget) {
+                    ForEach(model.availableTargets) { target in
+                        Text(target.displayName).tag(target)
+                    }
+                }
+                Button("Fensterliste aktualisieren", systemImage: "arrow.clockwise") {
+                    Task { await model.refreshTargets() }
+                }
+                .labelStyle(.iconOnly)
+                .help("Fensterliste aktualisieren")
+            }
+            Text("Bluey nimmt Mac-Audio und Mikrofon auf. Die Transkription läuft über den gewählten Anbieter. Informiere die Teilnehmenden vor dem Start.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(width: 330)
+        .disabled(model.recording || model.changingCapture)
     }
 
     private var centerHeader: some View {

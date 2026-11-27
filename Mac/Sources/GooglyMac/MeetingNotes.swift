@@ -256,6 +256,23 @@ enum MeetingNotes {
         if !transcriptText.isEmpty {
             combined += ["## Transkript", "", transcriptText, ""]
         }
+        if session.captureTargetName != nil || session.videoFilename != nil ||
+            !session.screenshots.isEmpty || !session.drawings.isEmpty {
+            combined += ["## Bildschirmaufnahme & Zeichnungen", ""]
+            if let source = session.captureTargetName { combined.append("- Bildquelle: \(source)") }
+            if let video = session.videoFilename { combined.append("- [Bildschirmvideo](<\(video)>)") }
+            for shot in session.screenshots.sorted(by: { $0.captured < $1.captured }) {
+                let caption = shot.label ?? (shot.manual ? "Screenshot" : "Folie / Bildschirmänderung")
+                let time = shot.captured.formatted(date: .omitted, time: .standard)
+                combined.append("- [\(time) · \(caption)](<\(shot.filename)>)")
+            }
+            for drawing in session.drawings.sorted(by: { $0.timestamp < $1.timestamp }) {
+                var line = "- \(drawing.timecode) · Zeichnung (\(drawing.source)) · [SVG](<drawings/\(drawing.svgFilename)>)"
+                if let png = drawing.pngFilename { line += " · [PNG](<drawings/\(png)>)" }
+                combined.append(line)
+            }
+            combined.append("")
+        }
         try? combined.joined(separator: "\n").write(to: sessionFolder.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
     }
 
