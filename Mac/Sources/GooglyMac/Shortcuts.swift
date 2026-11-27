@@ -60,7 +60,7 @@ struct Shortcut: Codable, Equatable {
 
 /// Everything Bluey does from the keyboard. Each can be changed or turned off in Settings ▸ Shortcuts.
 enum ShortcutAction: String, CaseIterable, Identifiable {
-    case talk, typeToBluey, notes, hide, wake, stop, pointHere, followMouse, stopPointing
+    case talk, typeToBluey, notes, meetingNotes, meetingRecord, meetingToT3, hide, wake, stop, pointHere, followMouse, stopPointing
 
     var id: String { rawValue }
 
@@ -75,6 +75,9 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .followMouse: return "Eyes follow my mouse"
         case .stopPointing: return "Stop pointing"
         case .notes: return "Quick notes"
+        case .meetingNotes: return "Call-Notizen öffnen"
+        case .meetingRecord: return "Meeting-Aufnahme starten / stoppen"
+        case .meetingToT3: return "Meeting-Aufgabe an T3 Code"
         }
     }
 
@@ -89,6 +92,9 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .followMouse: return "Toggles follow mode."
         case .stopPointing: return "Sends the pointer home."
         case .notes: return "Opens or hides the floating notes window (synced with the phone and Hermes)."
+        case .meetingNotes: return "Öffnet das Call-Notizen-Fenster mit Zeiterfassung, Transkript und Aufgaben."
+        case .meetingRecord: return "Startet oder stoppt die Meeting-Aufnahme samt Zeiterfassung aus jeder App."
+        case .meetingToT3: return "Öffnet direkt den Dialog, um eine Meeting-Aufgabe an T3 Code zu senden."
         }
     }
 
@@ -104,6 +110,9 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .followMouse: return Shortcut(keyCode: kVK_ANSI_F, modifiers: co, key: "F")
         case .stopPointing: return Shortcut(keyCode: kVK_ANSI_D, modifiers: co, key: "D")
         case .notes: return Shortcut(keyCode: kVK_ANSI_N, modifiers: co, key: "N")
+        case .meetingNotes: return Shortcut(keyCode: kVK_ANSI_M, modifiers: co, key: "M")
+        case .meetingRecord: return Shortcut(keyCode: kVK_ANSI_R, modifiers: co, key: "R")
+        case .meetingToT3: return Shortcut(keyCode: kVK_ANSI_T, modifiers: co, key: "T")
         }
     }
 }
