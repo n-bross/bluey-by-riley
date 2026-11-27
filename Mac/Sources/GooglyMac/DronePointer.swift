@@ -25,7 +25,7 @@ enum PointerStyle: String, CaseIterable {
     /// The original blueberry teardrop with googly eyes.
     case blueberry
 
-    var title: String { self == .drone ? "Keramik Drone" : "Blueberry" }
+    var title: String { self == .drone ? "Keramik-Drohne" : "Blaubeere" }
 }
 
 /// The drone pointer: a small Keramik drone (white ceramic body, black visor, glowing eyes, two rotors and a

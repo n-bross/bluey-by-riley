@@ -203,8 +203,14 @@ enum MeetingNotes {
             "- Dauer: \(durationText)" + (session.isTimerRunning ? " (läuft)" : ""),
             "- Aufgaben: \(session.tasks.count) (davon \(session.tasks.filter(\.isSentToT3).count) an T3 Code gesendet)",
             "- Nachrichten: \(session.messages.count)",
-            "",
         ]
+        if let target = session.captureTargetName, !target.isEmpty {
+            combined.append("- Bildquelle: \(target)")
+        }
+        if let video = session.videoFilename, !video.isEmpty {
+            combined.append("- Video: [\(video)](\(video))")
+        }
+        combined.append("")
         if !cleanNotes.isEmpty {
             combined += ["## Notizen", "", cleanNotes, ""]
         }
@@ -216,6 +222,27 @@ enum MeetingNotes {
                 combined.append("- \(box) \(task.title)\(badge)")
             }
             combined.append("")
+        }
+        if !session.screenshots.isEmpty {
+            combined += ["## Screenshots & Folien", ""]
+            for shot in session.screenshots {
+                let time = shot.captured.formatted(date: .omitted, time: .standard)
+                let caption = shot.label ?? (shot.manual ? "Screenshot" : "Folie / Bildschirmänderung")
+                combined.append("**[\(time)] \(caption):**")
+                combined.append("![\(caption)](\(shot.filename))")
+                combined.append("")
+            }
+        }
+        if !session.drawings.isEmpty {
+            combined += ["## Zeichnungen", ""]
+            for d in session.drawings {
+                let detail = (d.ocrText?.isEmpty == false ? d.ocrText! : "\(d.strokeCount) Striche")
+                combined.append("**[\(d.timecode)] Zeichnung (\(d.source)):** \(detail) · [SVG](drawings/\(d.svgFilename))")
+                if let png = d.pngFilename {
+                    combined.append("![Zeichnung \(d.timecode)](drawings/\(png))")
+                }
+                combined.append("")
+            }
         }
         if !session.messages.isEmpty {
             combined += ["## Bluey-Rückfragen", ""]
@@ -279,67 +306,23 @@ enum MeetingNotes {
 
     // MARK: Transcription
 
-    /// Saves the chunk's audio into the session folder and transcribes it.
+    /// Saves the chunk's audio into the session folder and transcribes it via the configured TranscriptionService.
     static func transcribe(audio: Data, session: String, index: Int, sessionStarted: Date) async throws -> (segments: [Segment], folder: URL) {
         let folder = folder(session: session, started: sessionStarted)
         let audioURL = folder.appendingPathComponent("audio", isDirectory: true)
         try? FileManager.default.createDirectory(at: audioURL, withIntermediateDirectories: true)
-        try audio.write(to: audioURL.appendingPathComponent(String(format: "chunk-%03d.m4a", index)))
-        do {
-            return (try await diarized(audio), folder)
-        } catch {
-            NSLog("Googly: diarized transcription failed (\(error)), trying \(fallbackModel)")
-            return (try await plain(audio), folder)
-        }
+        let chunkURL = audioURL.appendingPathComponent(String(format: "chunk-%03d.m4a", index))
+        try audio.write(to: chunkURL)
+        let segments = try await TranscriptionService.transcribe(fileURL: chunkURL, rawData: audio, fileExtension: "m4a", preferDiarize: true)
+        return (segments, folder)
     }
 
-    private static func diarized(_ audio: Data) async throws -> [Segment] {
-        let json = try await post(audio, fields: ["model": model, "response_format": "diarized_json", "chunking_strategy": "auto"])
-        let raw = (json["segments"] as? [[String: Any]] ?? []).map {
-            Segment(speaker: $0["speaker"] as? String ?? "?", start: $0["start"] as? Double ?? 0,
-                    end: $0["end"] as? Double ?? 0, text: ($0["text"] as? String ?? "").trimmingCharacters(in: .whitespaces))
-        }
-        // Join one speaker's consecutive pieces into a single turn.
-        var turns: [Segment] = []
-        for segment in raw where !segment.text.isEmpty {
-            if var last = turns.last, last.speaker == segment.speaker, segment.start - last.end < 2.5 {
-                last.text += " " + segment.text
-                last.end = segment.end
-                turns[turns.count - 1] = last
-            } else {
-                turns.append(segment)
-            }
-        }
-        return turns
+    static func plain(_ audio: Data, fileExtension: String = "m4a") async throws -> [Segment] {
+        try await TranscriptionService.transcribe(audio: audio, fileExtension: fileExtension, preferDiarize: false)
     }
 
-    static func plain(_ audio: Data) async throws -> [Segment] {
-        let json = try await post(audio, fields: ["model": fallbackModel, "response_format": "json"])
-        let text = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? [] : [Segment(speaker: "?", start: 0, end: 0, text: text)]
-    }
-
-    private static func post(_ audio: Data, fields: [String: String]) async throws -> [String: Any] {
-        guard let key = Keychain.get(.openai) else { throw RealtimeHost.TokenError.noKey }
-        let boundary = "googly-\(UUID().uuidString)"
-        var body = Data()
-        for (name, value) in fields {
-            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
-        }
-        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"chunk.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n".data(using: .utf8)!)
-        body.append(audio)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 300
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200, let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw RealtimeHost.TokenError.failed("transcription \(code) " + (String(data: data, encoding: .utf8) ?? ""))
-        }
-        return json
+    static func plain(fileURL: URL) async throws -> [Segment] {
+        try await TranscriptionService.transcribe(fileURL: fileURL, preferDiarize: false)
     }
 
     // MARK: Notes files
@@ -357,7 +340,7 @@ enum MeetingNotes {
         return folder
     }
 
-    private static func markdown(_ json: [String: Any], started: Date) -> String {
+    static func markdown(_ json: [String: Any], started: Date) -> String {
         let ended = (json["ended"] as? Double).map { Date(timeIntervalSince1970: $0) }
         let entries = json["entries"] as? [[String: Any]] ?? []
         let pending = json["transcribing"] as? Int ?? 0
@@ -374,18 +357,32 @@ enum MeetingNotes {
         } else {
             out.append("Still recording.")
         }
+        if let target = json["captureTarget"] as? String, !target.isEmpty {
+            out.append("Screen source: \(target).")
+        }
+        if let video = json["video"] as? String, !video.isEmpty {
+            out.append("Video: [\(video)](\(video))")
+        }
         if pending > 0 { out.append("\(pending) recording chunk(s) still being transcribed; this file updates when they're done.") }
         let asked = entries.filter { $0["kind"] as? String == "asked" }.count
         if asked > 0 { out.append("Riley asked Bluey \(asked) question(s); they're marked inline below.") }
         out += ["", "## Transcript", ""]
 
         for entry in entries {
+            let kind = entry["kind"] as? String
             let text = (entry["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { continue }
+            guard !text.isEmpty || kind == "screenshot" else { continue }
             let time = (entry["time"] as? Double).map { clock.string(from: Date(timeIntervalSince1970: $0)) } ?? ""
-            switch entry["kind"] as? String {
+            switch kind {
             case "transcript":
                 out.append("**[\(time)] Speaker \(entry["speaker"] as? String ?? "?"):** \(text)")
+            case "screenshot":
+                let path = (entry["path"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !path.isEmpty else { continue }
+                let manual = entry["manual"] as? Bool ?? false
+                let caption = text.isEmpty ? (manual ? "Screenshot" : "Folie / Bildschirmänderung") : text
+                out.append("**[\(time)] \(caption):**")
+                out.append("![\(caption)](\(path))")
             case "heard":
                 out.append("[\(time)] (live) \(text)")
             case "asked":
@@ -397,6 +394,18 @@ enum MeetingNotes {
             case "report":
                 let quoted = text.components(separatedBy: "\n").map { "> " + $0 }.joined(separator: "\n")
                 out.append("> **Research report:**\n" + quoted)
+            case "drawing":
+                let offset = entry["videoOffset"] as? String ?? ""
+                let source = entry["source"] as? String ?? "Zeichnung"
+                let img = entry["png"] as? String
+                let svg = entry["svg"] as? String
+                let stamp = offset.isEmpty ? time : "\(offset) | \(time)"
+                var line = "**[\(stamp)] Zeichnung (\(source)):** \(text)"
+                if let svg { line += " · [SVG](\(svg))" }
+                out.append(line)
+                if let img {
+                    out.append("![Zeichnung \(offset)](\(img))")
+                }
             default:
                 out.append("[\(time)] \(text)")
             }

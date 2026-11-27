@@ -56,12 +56,23 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
     @ViewBuilder var face: () -> Face
     @ViewBuilder var settings: () -> Settings
     @Binding var showSettings: Bool
+    #if os(macOS)
+    @Binding var showHermesScreen: Bool
+    var openSettingsWindow: (() -> Void)?
+    #endif
     @StateObject private var ui = WorkspaceUI()
     #if os(iOS)
     @State private var keyboardVisible = false
     #endif
 
-    private var info: HeaderInfo { HeaderInfo(connectionName: connectionName, onSettings: { showSettings = true }) }
+    private var info: HeaderInfo { HeaderInfo(connectionName: connectionName, onSettings: openSettings) }
+
+    private func openSettings() {
+        #if os(macOS)
+        if let openSettingsWindow { openSettingsWindow(); return }
+        #endif
+        showSettings = true
+    }
 
     var body: some View {
         Group {
@@ -83,10 +94,9 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
                 }
             #else
             HStack(spacing: 0) {
-                sidebar
+                sectionRail
                 Divider().overlay(Theme.line)
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             #endif
         }
@@ -94,7 +104,13 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
         .preferredColorScheme(.dark)
         .tint(Theme.accentLight)
         .sheet(isPresented: $showSettings) { settings() }
-        .onChange(of: tab) { _, _ in ui.endSearch(); ui.inDetail = false }
+        .onChange(of: tab) { _, next in
+            ui.endSearch()
+            ui.inDetail = false
+            #if os(macOS)
+            if next != .chat { showHermesScreen = false }
+            #endif
+        }
         .onChange(of: ui.requestedTab) { _, requested in
             guard let requested else { return }
             tab = requested
@@ -104,7 +120,12 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
 
     @ViewBuilder private var content: some View {
         switch tab {
-        case .chat: ChatTab(model: model, ui: ui, info: info)
+        case .chat:
+            #if os(macOS)
+            ChatTab(model: model, ui: ui, info: info, liveScreen: $showHermesScreen)
+            #else
+            ChatTab(model: model, ui: ui, info: info)
+            #endif
         case .todos: TodosTab(model: model, ui: ui, info: info)
         case .notes: NotesTab(model: model, ui: ui, info: info)
         case .pomodoro: PomodoroTab(model: model, ui: ui, info: info)
@@ -114,70 +135,43 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
     }
 
     #if os(macOS)
-    private var sidebar: some View {
-        let openTodos = model.snapshot.todos.count { !$0.deleted && !$0.done }
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                BlueyAvatar(mood: model.snapshot.threads.contains(where: \.isStreaming) ? .thinking : .listening)
-                    .frame(width: 44, height: 39)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Bluey").font(.fredoka(24)).foregroundStyle(.white)
-                    ConnectionDot(connected: model.connected, name: connectionName)
-                }
-            }
-            .padding(.bottom, 16)
+    private var sectionRail: some View {
+        VStack(spacing: 8) {
+            MiniBluey().frame(width: 24, height: 22)
+                .frame(height: 36)
+                .accessibilityHidden(true)
             ForEach(WorkspaceTab.allCases) { item in
                 Button { tab = item } label: {
-                    HStack(spacing: 10) {
-                        if item == .face {
-                            MiniBluey().frame(width: 20, height: 18)
-                        } else {
-                            Image(systemName: item.icon).frame(width: 20)
-                        }
-                        Text(item.title).font(.plexSans(14))
-                        Spacer()
-                        if item == .todos, openTodos > 0 {
-                            Text("\(openTodos)").font(.plexMono(11)).foregroundStyle(Theme.soft)
-                        }
-                        if item == .pomodoro, model.pomodoro.isRunning {
-                            Circle().fill(model.pomodoro.phase == .focus ? Theme.red : Theme.green).frame(width: 7, height: 7)
-                        }
-                    }
-                    .foregroundStyle(tab == item ? .white : Theme.soft)
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .background(tab == item ? Theme.cardStrong : .clear, in: RoundedRectangle(cornerRadius: 9))
-                    .contentShape(Rectangle())
+                    Image(systemName: item.icon)
+                        .frame(width: 32, height: 30)
+                        .foregroundStyle(tab == item ? Theme.accentLight : Theme.soft)
+                        .background(tab == item ? Theme.raised : .clear, in: RoundedRectangle(cornerRadius: 8))
                 }
-                .buttonStyle(.plain)
+                .help(item.title)
+                .accessibilityLabel(item.title)
+                .accessibilityAddTraits(tab == item ? .isSelected : [])
             }
             Spacer()
             if let openMeetings {
                 Button(action: openMeetings) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform.and.mic").frame(width: 20)
-                        Text("Call-Notizen").font(.plexSans(13.5))
-                        Spacer()
-                        Text("⌃⌥M").font(.plexMono(10)).foregroundStyle(Theme.soft.opacity(0.7))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
-                    .contentShape(Rectangle())
+                    Image(systemName: "waveform.and.mic")
+                        .frame(width: 32, height: 30)
+                        .foregroundStyle(Theme.soft)
                 }
-                .buttonStyle(.plain)
-                .padding(.bottom, 6)
+                .help("Call-Notizen (⌃⌥M)")
+                .accessibilityLabel("Call-Notizen")
             }
-            Button { showSettings = true } label: {
-                Label("Einstellungen", systemImage: "gearshape").font(.plexSans(13)).foregroundStyle(Theme.soft)
+            Button(action: openSettings) {
+                Image(systemName: "gearshape").frame(width: 32, height: 30)
             }
-            .buttonStyle(.plain)
+            .help("Einstellungen").accessibilityLabel("Einstellungen")
         }
-        .padding(16)
-        .frame(width: 210)
-        .frame(maxHeight: .infinity)
-        .background(Theme.panel.opacity(0.6))
+        .buttonStyle(.plain)
+        .font(.system(size: 14))
+        .foregroundStyle(Theme.soft)
+        .padding(.vertical, 4)
+        .frame(width: 46)
+        .background(Theme.panel)
     }
     #endif
 }

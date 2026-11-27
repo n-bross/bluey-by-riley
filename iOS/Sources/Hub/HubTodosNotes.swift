@@ -32,8 +32,8 @@ struct TodosView: View {
                 undated.append(todo)
             }
         }
-        return [("Overdue", overdue), ("Today", current), ("Upcoming", upcoming),
-                ("No date", undated), ("Done", done)]
+        return [("Überfällig", overdue), ("Heute", current), ("Demnächst", upcoming),
+                ("Ohne Datum", undated), ("Fertig", done)]
     }
 
     var body: some View {
@@ -41,10 +41,10 @@ struct TodosView: View {
         let groups = groups(today: today)
         let openCount = groups.dropLast().reduce(0) { $0 + $1.1.count }
         return VStack(spacing: 0) {
-            T3Header(title: "Todos", subtitle: "\(openCount) open", openDrawer: openDrawer) { EmptyView() }
+            T3Header(title: "Todos", subtitle: "\(openCount) offen", openDrawer: openDrawer) { EmptyView() }
             quickAdd
             if addError {
-                Text("Couldn’t add the todo. Try again.")
+                Text("Das Todo konnte nicht hinzugefügt werden. Versuche es erneut.")
                     .t3Text(.sm, color: T3.dangerForeground)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
@@ -61,23 +61,23 @@ struct TodosView: View {
                             .listRowSeparatorTint(T3.separator)
                             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                             .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) { Task { await hub.deleteTodo(todo.id) } } label: { Label("Delete", systemImage: "trash") }
+                                Button(role: .destructive) { Task { await hub.deleteTodo(todo.id) } } label: { Label("Löschen", systemImage: "trash") }
                                 if !todo.done {
                                     Button { Task { await hub.updateTodo(todo.id, ["due": day(tomorrow)]) } } label: {
-                                        Label("Tomorrow", systemImage: "arrow.turn.up.right")
+                                        Label("Morgen", systemImage: "arrow.turn.up.right")
                                     }
                                     .tint(T3.primary)
                                 }
                             }
                             .swipeActions(edge: .leading) {
                                 if todo.due != today, !todo.done {
-                                    Button { Task { await hub.updateTodo(todo.id, ["due": today]) } } label: { Label("Today", systemImage: "sun.max") }
+                                    Button { Task { await hub.updateTodo(todo.id, ["due": today]) } } label: { Label("Heute", systemImage: "sun.max") }
                                         .tint(.orange)
                                 }
                             }
                         }
                     } header: {
-                        Text(name).t3Text(.xs2, .medium, color: name == "Overdue" ? T3.dangerForeground : T3.foregroundSecondary)
+                        Text(name).t3Text(.xs2, .medium, color: name == "Überfällig" ? T3.dangerForeground : T3.foregroundSecondary)
                             .textCase(nil)
                             .padding(.top, 6)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 2, trailing: 16))
@@ -94,7 +94,7 @@ struct TodosView: View {
         }
         .background(T3.screen.ignoresSafeArea())
         .sheet(isPresented: $pickingDate) {
-            DatePicker("Due", selection: Binding(get: { newDue ?? Date() }, set: { newDue = $0 }), displayedComponents: .date)
+            DatePicker("Fällig", selection: Binding(get: { newDue ?? Date() }, set: { newDue = $0 }), displayedComponents: .date)
                 .datePickerStyle(.graphical).padding().presentationDetents([.medium])
         }
     }
@@ -102,15 +102,15 @@ struct TodosView: View {
     private var quickAdd: some View {
         HStack(spacing: 8) {
             Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(T3.iconMuted)
-            TextField("Add a todo", text: $newTitle).font(T3.font(.base)).focused($adding).submitLabel(.done)
+            TextField("Todo hinzufügen", text: $newTitle).font(T3.font(.base)).focused($adding).submitLabel(.done)
                 .onSubmit(add)
             Menu {
-                Button("Today") { newDue = Date() }
-                Button("Tomorrow") { newDue = tomorrow }
-                Button("Pick a date…") { pickingDate = true }
-                if newDue != nil { Button("No date", role: .destructive) { newDue = nil } }
+                Button("Heute") { newDue = Date() }
+                Button("Morgen") { newDue = tomorrow }
+                Button("Datum wählen …") { pickingDate = true }
+                if newDue != nil { Button("Ohne Datum", role: .destructive) { newDue = nil } }
             } label: {
-                Text(newDue.map { $0.formatted(.dateTime.day().month(.abbreviated)) } ?? "Date")
+                Text(newDue.map { $0.formatted(.dateTime.day().month(.abbreviated)) } ?? "Datum")
                     .t3Text(.xs, .medium, color: newDue == nil ? T3.foregroundSecondary : T3.primaryText)
                     .padding(.horizontal, 10).frame(height: 28)
                     .background(Capsule().fill(T3.subtle)).overlay(Capsule().stroke(T3.border, lineWidth: 1))
@@ -124,7 +124,7 @@ struct TodosView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canAdd)
-            .accessibilityLabel("Add todo")
+            .accessibilityLabel("Todo hinzufügen")
         }
         .disabled(isAdding)
         .padding(.horizontal, 12).frame(height: 44)
@@ -206,12 +206,12 @@ struct NotesView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                T3Header(title: "Notes", openDrawer: openDrawer) {
-                    T3IconButton(symbol: "square.and.pencil", label: "New note", prominent: true) {
+                T3Header(title: "Notizen", openDrawer: openDrawer) {
+                    T3IconButton(symbol: "square.and.pencil", label: "Neue Notiz", prominent: true) {
                         Task { if let n = try? await hub.createNote("") { open = n } }
                     }
                 }
-                T3SearchField(text: $search, placeholder: "Search notes").padding(.bottom, 8)
+                T3SearchField(text: $search, placeholder: "Notizen suchen").padding(.bottom, 8)
                 List {
                     ForEach(shown) { note in
                         Button { open = note } label: {
@@ -232,9 +232,9 @@ struct NotesView: View {
                         .listRowBackground(T3.screen)
                         .listRowSeparatorTint(T3.separator)
                         .swipeActions {
-                            Button(role: .destructive) { Task { await hub.deleteNote(note.id) } } label: { Label("Delete", systemImage: "trash") }
+                            Button(role: .destructive) { Task { await hub.deleteNote(note.id) } } label: { Label("Löschen", systemImage: "trash") }
                             Button { Task { try? await hub.saveNote(note.id, pinned: !note.pinned) } } label: {
-                                Label(note.pinned ? "Unpin" : "Pin", systemImage: "pin")
+                                Label(note.pinned ? "Lösen" : "Anheften", systemImage: "pin")
                             }
                             .tint(T3.primary)
                         }
@@ -270,7 +270,7 @@ struct HubNoteEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                T3IconButton(symbol: "chevron.left", label: "Back") { save(now: true); dismiss() }
+                T3IconButton(symbol: "chevron.left", label: "Zurück") { save(now: true); dismiss() }
                 Spacer()
                 Text(status).t3Text(.xs, color: T3.foregroundTertiary)
             }
@@ -298,11 +298,11 @@ struct HubNoteEditor: View {
         guard text != savedText else { return }  // opening a note isn't an edit
         saveTask?.cancel()
         let body = text
-        status = "Editing"
+        status = "Wird bearbeitet"
         saveTask = Task {
             if !now { try? await Task.sleep(for: .milliseconds(600)) }
             guard !Task.isCancelled else { return }
-            do { try await hub.saveNote(noteID, body: body); savedText = body; status = "Saved" } catch { status = "Not saved" }
+            do { try await hub.saveNote(noteID, body: body); savedText = body; status = "Gespeichert" } catch { status = "Speichern fehlgeschlagen" }
         }
     }
 }
@@ -324,17 +324,17 @@ struct HubBrowserView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                T3IconButton(symbol: "sidebar.left", label: "Menu", action: openDrawer)
+                T3IconButton(symbol: "sidebar.left", label: "Menü", action: openDrawer)
                 HStack(spacing: 6) {
                     Image(systemName: loading ? "arrow.triangle.2.circlepath" : "globe").font(.system(size: 13)).foregroundStyle(T3.iconMuted)
-                    TextField("Search or enter address", text: $address)
+                    TextField("Suchen oder Adresse eingeben", text: $address)
                         .font(T3.font(.sm)).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .keyboardType(.webSearch).submitLabel(.go).onSubmit(go)
                 }
                 .padding(.horizontal, 10).frame(height: 38)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(T3.input))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(T3.inputBorder, lineWidth: 1))
-                T3IconButton(symbol: "sparkles", label: "Ask Hermes", prominent: true) { asking = true }
+                T3IconButton(symbol: "sparkles", label: "Hermes fragen", prominent: true) { asking = true }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
             if let current {
@@ -342,8 +342,8 @@ struct HubBrowserView: View {
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "safari").font(.system(size: 30)).foregroundStyle(T3.iconMuted)
-                    Text("Browse here, or let Hermes browse for you").t3Text(.lg, .medium)
-                    Text("Tap ✦ to ask Hermes about this page or give it a browsing job; it uses its own browser on your server.")
+                    Text("Hier browsen oder Hermes beauftragen").t3Text(.lg, .medium)
+                    Text("Tippe auf ✦, um Hermes nach dieser Seite zu fragen oder ihm eine Browser-Aufgabe zu geben. Hermes nutzt seinen Browser auf deinem Server.")
                         .t3Text(.sm, color: T3.foregroundSecondary).multilineTextAlignment(.center)
                 }
                 .padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -366,10 +366,10 @@ struct HubBrowserView: View {
 
     private var askSheet: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Ask Hermes").t3Text(.xl, .bold)
+            Text("Hermes fragen").t3Text(.xl, .bold)
             if let current { Text(current.absoluteString).t3Text(.xs, color: T3.foregroundSecondary).lineLimit(1) }
             HStack {
-                ForEach(["Summarise this page", "Find the key facts", "Open it and do it for me"], id: \.self) { chip in
+                ForEach(["Seite zusammenfassen", "Wichtigste Fakten finden", "Seite öffnen und Aufgabe übernehmen"], id: \.self) { chip in
                     Button(chip) { askText = chip }.font(T3.font(.xs, .medium)).padding(.horizontal, 10).frame(height: 28)
                         .background(Capsule().fill(T3.subtle)).overlay(Capsule().stroke(T3.border, lineWidth: 1)).foregroundStyle(T3.foreground)
                 }
@@ -397,7 +397,7 @@ struct HubBrowserView: View {
                     if e["event"] as? String == "message.delta" { text += e["delta"] as? String ?? ""; result = text }
                     if e["event"] as? String == "run.completed" { result = (e["output"] as? String) ?? text }
                 }
-                if result == "…" { result = text.isEmpty ? "Done." : text }
+                if result == "…" { result = text.isEmpty ? "Erledigt." : text }
             } catch { result = error.localizedDescription }
         }
     }
@@ -451,22 +451,22 @@ struct HubSettingsView: View {
                 Section {
                     TextField("https://shipyard.your-tailnet.ts.net", text: $url)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                    SecureField(hub.config?.key.isEmpty == false ? "Key saved. Paste a new one to replace it." : "Key (optional with Tailscale)", text: $key)
-                    Button("Save and test") {
+                    SecureField(hub.config?.key.isEmpty == false ? "Schlüssel gespeichert. Zum Ersetzen einen neuen einfügen." : "Schlüssel (mit Tailscale optional)", text: $key)
+                    Button("Speichern und prüfen") {
                         let k = key.trimmingCharacters(in: .whitespacesAndNewlines)
                         let finalKey = k.isEmpty ? (hub.config?.key ?? "") : k
                         hub.configure(HubConfig(url: url.trimmingCharacters(in: .whitespacesAndNewlines), key: finalKey))
                         key = ""
-                        status = "Testing…"
-                        Task { status = await hub.health() ? "Connected." : (hub.problem ?? "No answer.") }
+                        status = "Verbindung wird geprüft …"
+                        Task { status = await hub.health() ? "Verbunden." : (hub.problem ?? "Keine Antwort.") }
                     }
                     if !status.isEmpty { Text(status).font(T3.font(.sm)).foregroundStyle(T3.foregroundSecondary) }
                 } header: { Text("Bluey Hub") } footer: {
-                    Text("Your hub runs next to Hermes on your server and is reached over Tailscale (keep the Tailscale app on). Through Tailscale your login is enough, no key needed. Your paired Mac can also send this address to the phone.")
+                    Text("Der Hub läuft auf demselben Server wie Hermes. Über Tailscale reicht dein Login. Dein gekoppelter Mac kann die Adresse an das iPhone senden.")
                 }
             }
-            .navigationTitle("Settings")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .navigationTitle("Einstellungen")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Fertig") { dismiss() } } }
             .onAppear { url = hub.config?.url ?? "" }
         }
     }

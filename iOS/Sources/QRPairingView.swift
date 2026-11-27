@@ -7,12 +7,12 @@ struct QRPairingView: View {
     @State private var error = ""
     var body: some View {
         VStack(spacing: 12) {
-            HStack { Text("Pair your Mac").font(.fredoka(24)); Spacer(); Button("Done") { dismiss() } }
-            Text("Open Bluey's Mac menu > Pair iPhone (QR), then scan the code. Your phone and Mac must be on the same network.")
+            HStack { Text("Mac koppeln").font(.fredoka(24)); Spacer(); Button("Fertig") { dismiss() } }
+            Text("Öffne auf dem Mac das Bluey-Menü und wähle „iPhone koppeln (QR)“. Scanne dann den Code. Beide Geräte müssen im selben Netzwerk sein.")
                 .font(.plexSans(14))
             QRScanner { text in
-                guard let record = PairingRecord.parse(text) else { error = "That isn't a Bluey pairing code."; return }
-                if link.pair(record) { dismiss() } else { error = "Couldn't save pairing securely. Try again." }
+                guard let record = PairingRecord.parse(text) else { error = "Das ist kein Kopplungscode für Bluey."; return }
+                if link.pair(record) { dismiss() } else { error = "Die Kopplung konnte nicht sicher gespeichert werden. Versuche es erneut." }
             } failure: { error = $0 }
             if !error.isEmpty { Text(error).font(.plexSans(13)).foregroundStyle(.orange) }
         }.padding(20).background(Color.black).preferredColorScheme(.dark)
@@ -41,18 +41,18 @@ private final class ScannerController: UIViewController, AVCaptureMetadataOutput
         AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
             DispatchQueue.main.async {
                 guard let self, !self.stopped else { return }
-                guard granted else { self.failure?("Enable Camera for Bluey in iPhone Settings to scan the pairing code."); return }
+                guard granted else { self.failure?("Erlaube Bluey in den iPhone-Einstellungen den Kamerazugriff, um den Kopplungscode zu scannen."); return }
                 self.configure()
             }
         }
     }
     private func configure() {
         guard let camera = AVCaptureDevice.default(for: .video), let input = try? AVCaptureDeviceInput(device: camera), session.canAddInput(input) else {
-            failure?("Camera isn't available."); return
+            failure?("Die Kamera ist nicht verfügbar."); return
         }
         session.addInput(input)
         let output = AVCaptureMetadataOutput()
-        guard session.canAddOutput(output) else { failure?("QR scanning isn't available."); return }
+        guard session.canAddOutput(output) else { failure?("Der QR-Scanner ist nicht verfügbar."); return }
         session.addOutput(output); output.setMetadataObjectsDelegate(self, queue: .main); output.metadataObjectTypes = [.qr]
         let preview = AVCaptureVideoPreviewLayer(session: session); preview.videoGravity = .resizeAspectFill
         preview.frame = view.bounds; view.layer.addSublayer(preview); self.preview = preview

@@ -31,6 +31,23 @@ final class HermesClient: ObservableObject {
         request("hermesRespond", ["run": run, "prompt": prompt, "choice": choice])
     }
 
+    @MainActor
+    func answerFromScreen(run: String, prompt: String, choice: String) async throws {
+        guard let link, link.connected else {
+            throw HubError.unreachable("Der gekoppelte Mac ist nicht verbunden.")
+        }
+        let data = try JSONSerialization.data(withJSONObject: ["run": run, "prompt": prompt, "choice": choice])
+        let reply: String? = await withCheckedContinuation { continuation in
+            link.request(Packet(command: "hermesRespond", text: String(decoding: data, as: UTF8.self))) {
+                continuation.resume(returning: $0?.text)
+            }
+        }
+        guard let reply, ["Allowed.", "Denied.", "Answer sent to Hermes."].contains(reply) else {
+            throw HubError.refused(0, reply ?? "Der Mac hat nicht geantwortet.")
+        }
+        sync()
+    }
+
     func setMode(_ mode: HermesApprovalMode) {
         request("hermesMode", ["mode": mode.rawValue])
     }

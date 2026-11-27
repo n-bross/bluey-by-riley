@@ -18,9 +18,9 @@ enum PointerTrail: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .comet: return "Comet Trail"
-        case .string: return "String to the Phone"
-        case .none: return "No Trail"
+        case .comet: return "Kometenspur"
+        case .string: return "Linie zum iPhone"
+        case .none: return "Ohne Spur"
         }
     }
 }

@@ -49,9 +49,17 @@ public struct NoteItem: Codable, Identifiable, Equatable, Sendable {
     public var createdAt: Date
     public var updatedAt: Date
     public var deleted: Bool
+    /// Optional vector handwriting / sketch attached directly to this note (Apple Notes style).
+    public var drawing: InkDrawing?
+    /// Linked note ID in Bluey Hub (`~/bluey-hub/notes/<id>.md`), when synced.
+    public var hubNoteID: String?
+    /// Origin tag such as "huion-live", "huion-offline", or "screen-annotation".
+    public var source: String?
 
-    public init(id: UUID = UUID(), title: String = "", body: String = "", pinned: Bool = false, now: Date = Date()) {
+    public init(id: UUID = UUID(), title: String = "", body: String = "", pinned: Bool = false,
+                drawing: InkDrawing? = nil, hubNoteID: String? = nil, source: String? = nil, now: Date = Date()) {
         self.id = id; self.title = title; self.body = body; self.pinned = pinned
+        self.drawing = drawing; self.hubNoteID = hubNoteID; self.source = source
         self.createdAt = now; self.updatedAt = now; self.deleted = false
     }
 
@@ -64,6 +72,14 @@ public struct NoteItem: Codable, Identifiable, Equatable, Sendable {
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
         deleted = try c.decodeIfPresent(Bool.self, forKey: .deleted) ?? false
+        drawing = try c.decodeIfPresent(InkDrawing.self, forKey: .drawing)
+        hubNoteID = try c.decodeIfPresent(String.self, forKey: .hubNoteID)
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+    }
+
+    public var hasDrawing: Bool {
+        if let d = drawing, !d.isEmpty { return true }
+        return false
     }
 
     /// The title, or the first line of the body when there is no title.
@@ -71,7 +87,8 @@ public struct NoteItem: Codable, Identifiable, Equatable, Sendable {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !t.isEmpty { return t }
         let first = body.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init) ?? ""
-        return first.isEmpty ? "Neue Notiz" : String(first.prefix(80))
+        if !first.isEmpty { return String(first.prefix(80)) }
+        return hasDrawing ? "Handschrift-Notiz" : "Neue Notiz"
     }
 }
 
@@ -143,6 +160,7 @@ public struct ChatThread: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var title: String
     public var model: String
+    public var hermesOptions: HermesChatOptions?
     public var webSearch: Bool
     public var messages: [ChatMessage]
     public var createdAt: Date
@@ -411,7 +429,10 @@ public struct ChatDelta: Codable, Equatable, Sendable {
     public var threadID: UUID
     public var messageID: UUID
     public var text: String
-    public init(threadID: UUID, messageID: UUID, text: String) { self.threadID = threadID; self.messageID = messageID; self.text = text }
+    public var liveTool: HermesLiveTool?
+    public init(threadID: UUID, messageID: UUID, text: String, liveTool: HermesLiveTool? = nil) {
+        self.threadID = threadID; self.messageID = messageID; self.text = text; self.liveTool = liveTool
+    }
 }
 
 /// Asking the Mac to answer in a chat. Attachments must already be uploaded.
@@ -421,7 +442,9 @@ public struct ChatRequest: Codable, Equatable, Sendable {
     public var attachments: [ChatAttachment]
     public var model: String?
     public var webSearch: Bool?
-    public init(threadID: UUID?, text: String, attachments: [ChatAttachment] = [], model: String? = nil, webSearch: Bool? = nil) {
+    public var hermesOptions: HermesChatOptions?
+    public init(threadID: UUID?, text: String, attachments: [ChatAttachment] = [], model: String? = nil, webSearch: Bool? = nil, hermesOptions: HermesChatOptions? = nil) {
+        self.hermesOptions = hermesOptions
         self.threadID = threadID; self.text = text; self.attachments = attachments; self.model = model; self.webSearch = webSearch
     }
 }

@@ -16,7 +16,7 @@ The task appears at the phone's top left, with a large white countdown at bottom
 
 ## Call notes on Mac
 
-On macOS 15 or later, choose **Call-Notizen …** in the Bluey menu. Allow screen and system audio recording and microphone access when macOS asks. Once the participants are informed, select **Aufnahme starten**. Bluey records Mac audio and microphone on separate tracks and sends audio chunks to OpenAI for transcription using your configured API key.
+On macOS 15 or later, choose **Call-Notizen …** in the Bluey menu. Allow screen and system audio recording and microphone access when macOS asks. Once the participants are informed, select **Aufnahme starten**. Bluey records Mac audio and microphone on separate tracks and sends audio chunks to OpenAI for transcription using your configured API key. Bluey can also offer to record when it recognizes a Teams meeting window in the foreground. The suggestion uses window titles or the meeting controls available through macOS Accessibility. Click **Aufzeichnen** to start the same call-note recording workflow.
 
 Type a question during or after the call in **Private Rückfragen**. Bluey uses the transcript and can suggest a sentence to ask the other participants. Stop the recording when the call ends. You can reopen the call from the same window or open the audio and notes in Finder under `~/Documents/Bluey Notes`.
 
@@ -58,7 +58,7 @@ Every shortcut can be changed or turned off in *Settings ▸ Shortcuts*: click i
 
 The phone app has a second side in T3 Code's mobile design (dark/light palette, DM Sans and layout ported from `pingdotgg/t3code` `apps/mobile`, MIT): **Threads** (all your Hermes conversations, new chats with live streaming, tool steps and approval cards), **Todos** (overdue / today / upcoming / no date, quick add, swipe for today/tomorrow/delete), **Notes** (Raycast-style: first line is the title, pinned first, saves as you type) and a **Browser** (browse yourself, or ask Hermes about the page / give it a browsing job). Open it from the pairing screen (*Use without Mac*), Bluey's app screen, or the drawer; it runs in portrait, Bluey's face stays landscape.
 
-It talks to **Bluey Hub** (`hub/bluey_hub.py`, Python stdlib only), a small service next to Hermes on an always-on machine:
+It talks to **Bluey Hub** (`hub/bluey_hub.py`), a small service next to Hermes on an always-on machine:
 
 - stores notes (`~/bluey-hub/notes/*.md`) and todos (`todos.json`), and passes chats through to Hermes' API server (Hermes' key never leaves that machine);
 - runs on `127.0.0.1` behind `tailscale serve`, so it's reachable only in your tailnet, and your Tailscale login is the authentication (`tailnet_logins` in `~/bluey-hub/config.json`; a bearer key works too);
@@ -67,6 +67,31 @@ It talks to **Bluey Hub** (`hub/bluey_hub.py`, Python stdlib only), a small serv
 On the Mac, **⌃⌥N** opens floating **Quick Notes** (the same notes), and *Settings ▸ Hermes ▸ Bluey Hub* holds the hub address; a paired phone receives it automatically when it connects (or with *Send to iPhone*). The phone needs the Tailscale app on.
 
 Setup on the server (as the Hermes user): copy `hub/` there, enable Hermes' API server (`API_SERVER_ENABLED=true`, a key, `127.0.0.1:8642`), run `bluey_hub.py serve --port 8766` as a user service, `tailscale serve --bg --https=8790 http://127.0.0.1:8766`, add your Tailscale login to `tailnet_logins`, and copy `hub/SKILL.md` to `~/.hermes/skills/personal/bluey-hub/`.
+
+### Hermes Live Screen
+
+In Bluey's chat composer, select **Hermes** to choose a model from the gateway's configured providers and set its thinking level where supported. The default option uses the gateway's settings. Each Mac workspace chat has its own Hermes conversation.
+
+Open **Live-Bildschirm** in a chat header or from an active Browser Use or Computer Use row. On Mac, the live screen opens in a resizable pane to the right of the conversation. Use **Abdocken** to move it to a native window. **Fenster anordnen** places it on either half of the current display or centers it. The floating window follows the active workspace chat and can be docked again with **Andocken**. On iPhone the viewer opens from the display icon beside the call controls or in a Hub thread.
+
+**Übernehmen** enables pointer and keyboard input. **Zurückgeben** returns control to Hermes. Closing the viewer releases its control lease. The live view shows activity, a stop action while a run is active, and pending decisions for the open chat. Computer Use and headed Chromium share the configured Hermes Bot Desktop.
+
+Future design work includes a drop preview for docking the window by dragging it, scheduled Hermes routines, and additional inspector views for notes and focus.
+
+Enable Bot Desktop and Computer Use on the Linux Hermes host first. Run the Hermes dashboard on loopback, with `HERMES_DASHBOARD_SESSION_TOKEN=file:/absolute/path/to/dashboard-token` in its service environment. That file should contain a randomly generated token and be readable by the OS user running Hermes and Bluey Hub. Use the same Hermes profile for the dashboard screen and the Hub's chat API.
+
+Copy the updated `hub/` to the host, then install the viewer dependencies with `python3 -m pip install -r hub/screen/requirements.txt` in the Hub service's Python environment and `npm ci --prefix hub/screen`. Add the following to the Hub's existing `config.json` and restart the Hub. The screen uses the same Hub address and authentication over Tailscale HTTPS.
+
+```json
+{
+  "hermes_screen": {
+    "dashboard_url": "http://127.0.0.1:9119",
+    "token_file": "/absolute/path/to/dashboard-token"
+  }
+}
+```
+
+Add `"profile": "your-profile"` inside `hermes_screen` if the dashboard serves multiple profiles and the chat API uses a named profile. The dashboard token stays on the host.
 
 ## Journal: what did I do?
 

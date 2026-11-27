@@ -18,6 +18,8 @@ final class WorkspaceStore {
     /// Called with the old and new pomodoro whenever it changes (to drive Bluey's screen checks).
     var onPomodoroChange: ((PomodoroState?, PomodoroState?) -> Void)?
     /// Extra context for chats, like the current focus session.
+    private var hermes: HermesGateway?
+    private static let hermesModel = ChatModelInfo(id: "hermes", name: "Hermes")
     var chatContext: () -> String = { "" }
 
     init(folder: URL? = nil) {
@@ -36,8 +38,29 @@ final class WorkspaceStore {
             }
         }
         snapshot.pruneTombstones()
-        if snapshot.defaultModel == nil { snapshot.defaultModel = ChatEngine.fallbackModel }
-        if snapshot.models.isEmpty { snapshot.models = [ChatModelInfo(id: ChatEngine.fallbackModel, name: ChatEngine.displayName(ChatEngine.fallbackModel))] }
+        if snapshot.defaultModel == nil { snapshot.defaultModel = ChatEngine.defaultModelID }
+        if snapshot.models.isEmpty {
+            let preferred = ChatEngine.defaultModelID
+            let name = preferred == ChatEngine.hermesModelID ? "Hermes (Subscription)" : ChatEngine.displayName(preferred)
+            snapshot.models = [ChatModelInfo(id: preferred, name: name)]
+        }
+    }
+
+    func enableHermes(_ gateway: HermesGateway) {
+        hermes = gateway
+        if !snapshot.models.contains(Self.hermesModel) { snapshot.models.insert(Self.hermesModel, at: 0) }
+        let migration = "workspaceHermesDefault"
+        if !UserDefaults.standard.bool(forKey: migration), HubSettings.configured || HermesGateway.config() != nil {
+            UserDefaults.standard.set(true, forKey: migration)
+            if snapshot.defaultModel == ChatEngine.fallbackModel { snapshot.defaultModel = Self.hermesModel.id }
+            for index in snapshot.threads.indices where !snapshot.threads[index].deleted &&
+                snapshot.threads[index].model == ChatEngine.fallbackModel {
+                snapshot.threads[index].model = Self.hermesModel.id
+                snapshot.threads[index].updatedAt = max(Date(), snapshot.threads[index].updatedAt.addingTimeInterval(0.001))
+            }
+            save()
+        }
+        publishSoon()
     }
 
     func start() {
@@ -121,9 +144,13 @@ final class WorkspaceStore {
         Task { @MainActor in
             let models = await ChatEngine.models()
             guard !models.isEmpty else { return }
-            snapshot.models = models
-            if let current = snapshot.defaultModel, !models.contains(where: { $0.id == current }) {
-                snapshot.defaultModel = models.first(where: { $0.id == ChatEngine.fallbackModel })?.id ?? models.first?.id
+            let deduped = models.filter { $0.id != Self.hermesModel.id }
+            snapshot.models = (hermes == nil && !models.contains(where: { $0.id == Self.hermesModel.id }))
+                ? models
+                : [Self.hermesModel] + deduped
+            let preferred = ChatEngine.defaultModelID
+            if let current = snapshot.defaultModel, !snapshot.models.contains(where: { $0.id == current }) {
+                snapshot.defaultModel = snapshot.models.first(where: { $0.id == preferred })?.id ?? snapshot.models.first?.id
             }
             publishSoon()
         }
@@ -138,6 +165,13 @@ final class WorkspaceStore {
         guard !text.isEmpty || !request.attachments.isEmpty else { throw ChatEngine.Failure.message("Schreib zuerst eine Nachricht.") }
         let now = Date()
         let model = request.model ?? snapshot.defaultModel ?? ChatEngine.fallbackModel
+        let useHermes = model == Self.hermesModel.id
+        if useHermes {
+            guard hermes != nil else { throw HermesGateway.HermesError.notConfigured }
+            guard request.attachments.isEmpty else {
+                throw ChatEngine.Failure.message("Der Hermes-Chat unterstützt hier Text. Wähle für Anhänge ein anderes Modell.")
+            }
+        }
         var thread: ChatThread
         if let id = request.threadID, let existing = snapshot.threads.first(where: { $0.id == id && !$0.deleted }) {
             guard chats[id] == nil else { throw ChatEngine.Failure.message("Bluey antwortet in diesem Chat noch.") }
@@ -149,6 +183,7 @@ final class WorkspaceStore {
         // Only attachments that really exist on this Mac.
         let attachments = request.attachments.filter { FileManager.default.fileExists(atPath: attachmentURL($0.id).path) }
         thread.model = model
+        if useHermes, let options = request.hermesOptions { thread.hermesOptions = options }
         if let web = request.webSearch { thread.webSearch = web }
         thread.messages.append(ChatMessage(role: .user, text: text, attachments: attachments, now: now))
         let answer = ChatMessage(role: .assistant, text: "", model: model, status: .streaming, now: now.addingTimeInterval(0.001))
@@ -161,15 +196,24 @@ final class WorkspaceStore {
                                      context: context(), attachmentData: { [folder = attachmentsFolder] id in
                                          try? Data(contentsOf: folder.appendingPathComponent(id.uuidString)) })
         let threadID = thread.id, messageID = answer.id
+        let hermesOptions = thread.hermesOptions
         chats[threadID] = Task { @MainActor [weak self] in
             var lastSent = Date.distantPast
+            var lastTool: HermesLiveTool?
             do {
-                let final = try await ChatEngine.stream(input) { text in
-                    guard let self, Date().timeIntervalSince(lastSent) > 0.06 else { return }
+                let publish: (String, HermesLiveTool?) -> Void = { text, liveTool in
+                    guard let self, liveTool != lastTool || Date().timeIntervalSince(lastSent) > 0.06 else { return }
+                    lastTool = liveTool
                     lastSent = Date()
                     self.updateAnswer(threadID, messageID) { $0.text = text }
-                    let delta = ChatDelta(threadID: threadID, messageID: messageID, text: text)
+                    let delta = ChatDelta(threadID: threadID, messageID: messageID, text: text, liveTool: liveTool)
                     for l in self.listeners.values { l.delta(delta) }
+                }
+                let final: String
+                if useHermes, let hermes = self?.hermes {
+                    final = try await hermes.streamWorkspace(text, threadID: threadID, options: hermesOptions, onEvent: publish)
+                } else {
+                    final = try await ChatEngine.stream(input) { publish($0, nil) }
                 }
                 self?.finish(threadID, messageID) { $0.text = final; $0.status = .done }
             } catch is CancellationError {

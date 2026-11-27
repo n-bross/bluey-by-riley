@@ -7,18 +7,40 @@ struct HermesView: View {
     @ObservedObject var link: MacLink
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
+    @State private var showDetails = false
     @FocusState private var typing: Bool
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(width: 290)
-                .background(Color(hex: Palette.panel).opacity(0.6))
-            chat
+        GeometryReader { geometry in
+            if geometry.size.width >= 700 {
+                HStack(spacing: 0) {
+                    sidebar.frame(width: 270).background(Theme.panel)
+                    Divider().overlay(Theme.line)
+                    chat
+                }
+            } else {
+                VStack(spacing: 0) {
+                    HStack {
+                        T3IconButton(symbol: "chevron.left", label: "Schließen") { dismiss() }
+                        Text("Hermes-Aktivität").font(.plexSans(16).weight(.semibold))
+                        Spacer()
+                        T3IconButton(symbol: "slider.horizontal.3", label: "Details und Freigaben") {
+                            showDetails = true
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .background(Theme.panel)
+                    Divider().overlay(Theme.line)
+                    chat
+                }
+            }
         }
-        .background(Color.black)
+        .sheet(isPresented: $showDetails) {
+            sidebar.background(Theme.panel)
+        }
+        .background(Theme.background)
         .preferredColorScheme(.dark)
-        .tint(Color(hex: Palette.berry1))
+        .tint(Theme.accentLight)
         .onAppear { hermes.sync() }
     }
 
@@ -28,29 +50,32 @@ struct HermesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Button { dismiss() } label: {
+                    Button {
+                        if showDetails { showDetails = false }
+                        else { dismiss() }
+                    } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 17, weight: .semibold))
                             .frame(width: 40, height: 40)
                             .background(Color.white.opacity(0.08), in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
+                    .accessibilityLabel("Schließen")
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Hermes").font(.fredoka(26)).foregroundStyle(.white)
                         HStack(spacing: 6) {
                             Circle().fill(statusColor).frame(width: 7, height: 7)
                             Text(statusText)
                                 .font(.plexSans(12))
-                                .foregroundStyle(Color(hex: Palette.inkSoft))
+                                .foregroundStyle(Theme.soft)
                                 .lineLimit(2)
                         }
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    label("Risky steps")
-                    Picker("Risky steps", selection: Binding(
+                    label("Freigaben")
+                    Picker("Freigaben", selection: Binding(
                         get: { hermes.state?.mode ?? .ask },
                         set: { hermes.setMode($0) })) {
                         ForEach(HermesApprovalMode.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -58,41 +83,41 @@ struct HermesView: View {
                     .pickerStyle(.segmented)
                     Text(modeHelp)
                         .font(.plexSans(11))
-                        .foregroundStyle(Color(hex: Palette.inkSoft))
+                        .foregroundStyle(Theme.soft)
                 }
 
                 Divider().overlay(Color.white.opacity(0.08))
                 ActivityCard(state: hermes.state)
 
-                Text("Hold Bluey's face and say “tell Hermes…”, or type below. Hermes uses its own tools: messages, browser, computer, calendar and to-dos.")
+                Text("Tippe einen Auftrag oder halte Blueys Gesicht gedrückt und sag „Frag Hermes …“.")
                     .font(.plexSans(11))
-                    .foregroundStyle(Color(hex: Palette.inkSoft))
+                    .foregroundStyle(Theme.soft)
             }
             .padding(22)
         }
     }
 
     private var statusColor: Color {
-        guard link.connected else { return Color(hex: Palette.inkSoft).opacity(0.5) }
+        guard link.connected else { return Theme.soft.opacity(0.5) }
         return hermes.state?.available == true ? Color(hex: 0x5BE49B) : Color(hex: 0xEBAC73)
     }
 
     private var statusText: String {
-        guard link.connected else { return "Mac not connected" }
-        guard let state = hermes.state else { return "Checking…" }
-        return state.available ? "Connected through your Mac" : (state.problem ?? "Not reachable")
+        guard link.connected else { return "Mac nicht verbunden" }
+        guard let state = hermes.state else { return "Verbindung wird geprüft …" }
+        return state.available ? "Über deinen Mac verbunden" : (state.problem ?? "Nicht erreichbar")
     }
 
     private var modeHelp: String {
         switch hermes.state?.mode ?? .ask {
-        case .ask: return "A card appears here and on the Mac; you choose."
-        case .deny: return "Hermes is refused anything risky and has to find another way."
-        case .allow: return "Hermes goes ahead without asking. ⌃⌥S on the Mac doesn't stop Hermes; use Stop on a request."
+        case .ask: return "Du entscheidest hier oder am Mac über jede Freigabe."
+        case .deny: return "Hermes muss bei abgelehnten Schritten einen anderen Weg finden."
+        case .allow: return "Hermes führt Schritte ohne Rückfrage aus. Mit „Stoppen“ hältst du einen laufenden Auftrag an."
         }
     }
 
     private func label(_ text: String) -> some View {
-        Text(text).font(.plexMono(11)).textCase(.uppercase).foregroundStyle(Color(hex: Palette.inkSoft))
+        Text(text).font(.plexMono(11)).textCase(.uppercase).foregroundStyle(Theme.soft)
     }
 
     // MARK: Right: conversation
@@ -104,10 +129,10 @@ struct HermesView: View {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         if (hermes.state?.runs ?? []).isEmpty {
                             VStack(spacing: 10) {
-                                Image(systemName: "sparkles").font(.system(size: 30)).foregroundStyle(Color(hex: Palette.berry2))
-                                Text("Nothing asked yet").font(.fredoka(18)).foregroundStyle(.white)
-                                Text("Try “What's on my calendar today?” or “Send Anna a message that I'm running late.”")
-                                    .font(.plexSans(13)).foregroundStyle(Color(hex: Palette.inkSoft))
+                                Image(systemName: "sparkles").font(.system(size: 30)).foregroundStyle(Theme.accentLight)
+                                Text("Noch keine Aufträge").font(.fredoka(18)).foregroundStyle(.white)
+                                Text("Frag Hermes zum Beispiel nach deinen heutigen Terminen.")
+                                    .font(.plexSans(13)).foregroundStyle(Theme.soft)
                                     .multilineTextAlignment(.center)
                             }
                             .frame(maxWidth: .infinity)
@@ -128,13 +153,13 @@ struct HermesView: View {
             if !hermes.message.isEmpty {
                 Text(hermes.message)
                     .font(.plexSans(12))
-                    .foregroundStyle(Color(hex: Palette.inkSoft))
+                    .foregroundStyle(Theme.soft)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 22)
                     .lineLimit(2)
             }
             HStack(spacing: 10) {
-                TextField("Ask Hermes…", text: $draft, axis: .vertical)
+                TextField("Hermes fragen …", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($typing)
                     .font(.plexSans(15))
@@ -152,7 +177,7 @@ struct HermesView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !link.connected)
-                .accessibilityLabel("Send to Hermes")
+                .accessibilityLabel("An Hermes senden")
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 12)
@@ -169,12 +194,11 @@ struct HermesView: View {
 private struct RunView: View {
     let run: HermesRun
     @ObservedObject var hermes: HermesClient
-    @State private var answer = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Spacer(minLength: 100)
+                Spacer(minLength: 36)
                 Text(run.prompt)
                     .font(.plexSans(15).weight(.medium))
                     .foregroundStyle(.white)
@@ -182,105 +206,47 @@ private struct RunView: View {
                     .padding(.vertical, 10)
                     .background(BlobShape.linear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
-            ForEach(run.pending) { prompt in promptCard(prompt) }
+            ForEach(run.pending) { prompt in
+                WorkspaceHermesPromptCard(prompt: prompt) { value in
+                    try await hermes.answerFromScreen(run: run.id, prompt: prompt.id, choice: value)
+                }
+            }
             HStack(alignment: .bottom, spacing: 8) {
                 MiniBluey().frame(width: 28, height: 25)
                 VStack(alignment: .leading, spacing: 6) {
                     switch run.status {
                     case .completed:
-                        Text(LocalizedStringKey(run.output ?? "Done."))
+                        Text(LocalizedStringKey(run.output ?? "Erledigt."))
                             .font(.plexSans(15))
-                            .foregroundStyle(Color(hex: Palette.ink))
+                            .foregroundStyle(Theme.text)
                             .textSelection(.enabled)
                     case .failed, .cancelled:
-                        Text(run.status == .cancelled ? "Stopped." : (run.output ?? "Hermes couldn't finish this."))
+                        Text(run.status == .cancelled ? "Gestoppt." : (run.output ?? "Hermes konnte den Auftrag nicht abschließen."))
                             .font(.plexSans(14))
-                            .foregroundStyle(Color(hex: 0xB0412E))
+                            .foregroundStyle(Theme.red)
                     default:
                         HStack(spacing: 8) {
-                            ProgressView().tint(Color(hex: Palette.berry2))
-                            Text(run.status == .waiting ? "Waiting for you" : (run.activity ?? "Hermes is working…"))
+                            ProgressView().tint(Theme.accentLight)
+                            Text(run.status == .waiting ? "Wartet auf deine Antwort" : (run.activity ?? "Hermes arbeitet …"))
                                 .font(.plexSans(14))
-                                .foregroundStyle(Color(hex: Palette.ink))
-                            Button("Stop") { hermes.stop(run.id) }
+                                .foregroundStyle(Theme.text)
+                            Button("Stoppen") { hermes.stop(run.id) }
                                 .font(.plexSans(13).weight(.semibold))
                                 .disabled(run.id.hasPrefix("local-"))
                         }
                     }
                     Text(run.started.formatted(date: .omitted, time: .shortened))
                         .font(.plexMono(10))
-                        .foregroundStyle(Color(hex: Palette.inkSoft))
+                        .foregroundStyle(Theme.soft)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                Spacer(minLength: 80)
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                Spacer(minLength: 14)
             }
         }
     }
 
-    @ViewBuilder
-    private func promptCard(_ prompt: HermesPrompt) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(prompt.kind == .approval ? "Hermes wants to run" : "Hermes asks",
-                  systemImage: prompt.kind == .approval ? "exclamationmark.shield" : "questionmark.bubble")
-                .font(.plexSans(13).weight(.semibold))
-                .foregroundStyle(Color(hex: 0xFFD66B))
-            Text(prompt.text)
-                .font(prompt.kind == .approval ? .plexMono(13) : .plexSans(15))
-                .foregroundStyle(.white)
-                .textSelection(.enabled)
-            if let detail = prompt.detail {
-                Text(detail).font(.plexSans(12)).foregroundStyle(Color(hex: Palette.inkSoft))
-            }
-            if prompt.kind == .approval {
-                HStack(spacing: 8) {
-                    ForEach(prompt.choices.sorted { order($0) < order($1) }, id: \.self) { choice in
-                        Button(HermesPrompt.choiceTitle(choice)) {
-                            hermes.respond(run: run.id, prompt: prompt.id, choice: choice)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(choice == "deny" ? Color(hex: 0xE5547A) : Color(hex: Palette.berry2))
-                    }
-                }
-            } else {
-                if !prompt.choices.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(prompt.choices, id: \.self) { choice in
-                            Button(choice) { hermes.respond(run: run.id, prompt: prompt.id, choice: choice) }
-                                .buttonStyle(.bordered)
-                        }
-                    }
-                }
-                HStack {
-                    TextField("Your answer", text: $answer)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit(sendAnswer(prompt))
-                    Button("Send", action: sendAnswer(prompt))
-                        .buttonStyle(.borderedProminent)
-                        .disabled(answer.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
-        .padding(14)
-        .background(Color(hex: 0x2A2440), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color(hex: 0xFFD66B), lineWidth: 2))
-        .padding(.leading, 36)
-        .padding(.trailing, 60)
-    }
-
-    private func sendAnswer(_ prompt: HermesPrompt) -> () -> Void {
-        {
-            let text = answer.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return }
-            answer = ""
-            hermes.respond(run: run.id, prompt: prompt.id, choice: text)
-        }
-    }
-
-    private func order(_ choice: String) -> Int {
-        ["once", "session", "always", "deny"].firstIndex(of: choice) ?? 9
-    }
 }
 
 /// Today's real activity from ActivityWatch: active time, away time, and where it went.
@@ -289,16 +255,16 @@ struct ActivityCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Today").font(.plexMono(11)).textCase(.uppercase).foregroundStyle(Color(hex: Palette.inkSoft))
+            Text("Heute").font(.plexMono(11)).textCase(.uppercase).foregroundStyle(Theme.soft)
             if let today = state?.today {
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(ActivitySummary.duration(today.activeSeconds)).font(.fredoka(30)).foregroundStyle(.white)
-                        Text("active").font(.plexSans(11)).foregroundStyle(Color(hex: Palette.inkSoft))
+                        Text("Aktiv").font(.plexSans(11)).foregroundStyle(Theme.soft)
                     }
                     VStack(alignment: .leading, spacing: 0) {
                         Text(ActivitySummary.duration(today.afkSeconds)).font(.fredoka(20)).foregroundStyle(.white.opacity(0.7))
-                        Text("away").font(.plexSans(11)).foregroundStyle(Color(hex: Palette.inkSoft))
+                        Text("Abwesend").font(.plexSans(11)).foregroundStyle(Theme.soft)
                     }
                 }
                 let top = today.apps.prefix(6)
@@ -308,7 +274,7 @@ struct ActivityCard: View {
                         HStack {
                             Text(app.name).font(.plexSans(12)).foregroundStyle(.white).lineLimit(1)
                             Spacer()
-                            Text(ActivitySummary.duration(app.seconds)).font(.plexMono(11)).foregroundStyle(Color(hex: Palette.inkSoft))
+                            Text(ActivitySummary.duration(app.seconds)).font(.plexMono(11)).foregroundStyle(Theme.soft)
                         }
                         GeometryReader { geo in
                             Capsule().fill(BlobShape.linear).frame(width: max(4, geo.size.width * app.seconds / most), height: 5)
@@ -316,14 +282,14 @@ struct ActivityCard: View {
                         .frame(height: 5)
                     }
                 }
-                Text("From ActivityWatch: only time with keyboard or mouse use counts as active.")
-                    .font(.plexSans(10)).foregroundStyle(Color(hex: Palette.inkSoft))
+                Text("ActivityWatch zählt Zeit mit Tastatur- oder Mausaktivität.")
+                    .font(.plexSans(10)).foregroundStyle(Theme.soft)
             } else {
                 Text(state?.activityAvailable == false
-                     ? "ActivityWatch isn't running on the Mac. Start it to track real active time."
-                     : "Loading activity…")
+                     ? "Starte ActivityWatch am Mac, um aktive Zeit zu erfassen."
+                     : "Aktivität wird geladen …")
                     .font(.plexSans(12))
-                    .foregroundStyle(Color(hex: Palette.inkSoft))
+                    .foregroundStyle(Theme.soft)
             }
         }
     }

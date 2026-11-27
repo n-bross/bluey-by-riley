@@ -11,6 +11,13 @@ public enum Palette {
     public static let inkSoft: UInt32 = 0xB9B2CC
     public static let panel: UInt32 = 0x1E1B29
 
+    public static let workspaceCanvas: UInt32 = 0x10131D
+    public static let workspaceSidebar: UInt32 = 0x171B28
+    public static let workspaceRaised: UInt32 = 0x202637
+    public static let workspaceEdge: UInt32 = 0x33394A
+    public static let workspaceText: UInt32 = 0xF0F2FB
+    public static let workspaceMuted: UInt32 = 0xAEB6CA
+
     public static let gradient: [UInt32] = [berry1, berry2, berry3, berry4]
     public static let gradientStops: [Double] = [0, 0.34, 0.68, 1]
 

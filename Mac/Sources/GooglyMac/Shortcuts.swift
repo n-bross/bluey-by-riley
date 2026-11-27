@@ -60,21 +60,22 @@ struct Shortcut: Codable, Equatable {
 
 /// Everything Bluey does from the keyboard. Each can be changed or turned off in Settings ▸ Shortcuts.
 enum ShortcutAction: String, CaseIterable, Identifiable {
-    case talk, typeToBluey, notes, meetingNotes, meetingRecord, meetingToT3, hide, wake, stop, pointHere, followMouse, stopPointing
+    case talk, typeToBluey, notes, annotateScreen, meetingNotes, meetingRecord, meetingToT3, hide, wake, stop, pointHere, followMouse, stopPointing
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .talk: return "Talk to Bluey"
-        case .typeToBluey: return "Type to Bluey"
-        case .hide: return "Hide / show Bluey"
-        case .wake: return "Start / stop listening"
-        case .stop: return "Stop him (emergency brake)"
-        case .pointHere: return "Point where my mouse is"
-        case .followMouse: return "Eyes follow my mouse"
-        case .stopPointing: return "Stop pointing"
-        case .notes: return "Quick notes"
+        case .talk: return "Mit Bluey sprechen"
+        case .typeToBluey: return "Bluey schreiben"
+        case .hide: return "Bluey aus- oder einblenden"
+        case .wake: return "Zuhören starten oder beenden"
+        case .stop: return "Blueys Aktionen stoppen"
+        case .pointHere: return "Auf meinen Mauszeiger zeigen"
+        case .followMouse: return "Augen folgen dem Mauszeiger"
+        case .stopPointing: return "Zeigen beenden"
+        case .notes: return "Schnellnotizen"
+        case .annotateScreen: return "Auf Bildschirm zeichnen"
         case .meetingNotes: return "Call-Notizen öffnen"
         case .meetingRecord: return "Meeting-Aufnahme starten / stoppen"
         case .meetingToT3: return "Meeting-Aufgabe an T3 Code"
@@ -83,15 +84,16 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
-        case .talk: return "Hold, speak, let go. With the phone connected it wakes the phone instead."
-        case .typeToBluey: return "Opens the notch with the cursor in the text field."
-        case .hide: return "Hides him everywhere (notch, pointer, avatar). Focus timers keep running."
-        case .wake: return "Keeps the microphone session open, or ends it."
-        case .stop: return "Stops clicks, typing and pointing right away."
-        case .pointHere: return "His pointer flies to your mouse."
-        case .followMouse: return "Toggles follow mode."
-        case .stopPointing: return "Sends the pointer home."
-        case .notes: return "Opens or hides the floating notes window (synced with the phone and Hermes)."
+        case .talk: return "Gedrückt halten, sprechen und loslassen. Ein verbundenes iPhone wird dabei aktiviert."
+        case .typeToBluey: return "Öffnet die Notch und setzt den Cursor ins Textfeld."
+        case .hide: return "Blendet Notch, Zeiger und Avatar aus. Fokus-Timer laufen weiter."
+        case .wake: return "Öffnet oder beendet die Mikrofon-Session."
+        case .stop: return "Stoppt Klicks, Eingaben und Zeigen sofort."
+        case .pointHere: return "Blueys Zeiger bewegt sich zum Mauszeiger."
+        case .followMouse: return "Schaltet die Blickverfolgung um."
+        case .stopPointing: return "Lässt Blueys Zeiger zurückkehren."
+        case .notes: return "Öffnet oder verbirgt das Notizfenster. Die Notizen bleiben mit iPhone und Hermes synchron."
+        case .annotateScreen: return "Zeichne direkt auf deinen Bildschirm (mit Huion-Stift oder Maus) zum Teilen oder an Bluey senden."
         case .meetingNotes: return "Öffnet das Call-Notizen-Fenster mit Zeiterfassung, Transkript und Aufgaben."
         case .meetingRecord: return "Startet oder stoppt die Meeting-Aufnahme samt Zeiterfassung aus jeder App."
         case .meetingToT3: return "Öffnet direkt den Dialog, um eine Meeting-Aufgabe an T3 Code zu senden."
@@ -110,6 +112,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .followMouse: return Shortcut(keyCode: kVK_ANSI_F, modifiers: co, key: "F")
         case .stopPointing: return Shortcut(keyCode: kVK_ANSI_D, modifiers: co, key: "D")
         case .notes: return Shortcut(keyCode: kVK_ANSI_N, modifiers: co, key: "N")
+        case .annotateScreen: return Shortcut(keyCode: kVK_ANSI_A, modifiers: co, key: "A")
         case .meetingNotes: return Shortcut(keyCode: kVK_ANSI_M, modifiers: co, key: "M")
         case .meetingRecord: return Shortcut(keyCode: kVK_ANSI_R, modifiers: co, key: "R")
         case .meetingToT3: return Shortcut(keyCode: kVK_ANSI_T, modifiers: co, key: "T")

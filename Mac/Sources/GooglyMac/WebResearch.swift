@@ -28,6 +28,24 @@ enum WebResearch {
     }
 
     static func research(_ question: String, context: String?) async throws -> ResearchReport {
+        let provider = Settings.shared.llmProvider
+        if provider != .openai {
+            var prompt = question
+            if let context, !context.isEmpty { prompt += "\n\nWhat's on the user's screen, for context: \(context)" }
+            let instructions = """
+            Research the question on the web (if you have web search tools, use them) and write a short, friendly report for a busy person. \
+            First line: a plain title of under eight words. Then one to four short paragraphs (four at most), \
+            leading with the direct answer, then the most useful details. Plain text only: no markdown headings or bullet lists.
+            """
+            let raw = try await LLMService.complete(
+                prompt: prompt, instructions: instructions, provider: provider,
+                hermesSession: "bluey-research-\(UUID().uuidString.prefix(8).lowercased())", timeout: 90
+            )
+            let cleaned = raw.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "#", with: "")
+            let blocks = cleaned.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            guard let title = blocks.first else { throw ResearchError.failed("empty answer") }
+            return ResearchReport(question: question, title: title, paragraphs: Array(blocks.dropFirst().prefix(4)), sources: [])
+        }
         guard let key = Keychain.get(.openai) else { throw ResearchError.noKey }
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
         request.httpMethod = "POST"

@@ -11,9 +11,9 @@ public enum HermesApprovalMode: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .ask: return "Ask me"
-        case .deny: return "Always deny"
-        case .allow: return "Always allow"
+        case .ask: return "Nachfragen"
+        case .deny: return "Ablehnen"
+        case .allow: return "Erlauben"
         }
     }
 }
@@ -58,10 +58,10 @@ public struct HermesPrompt: Codable, Equatable, Identifiable, Sendable {
 
     public static func choiceTitle(_ choice: String) -> String {
         switch choice {
-        case "once": return "Allow"
-        case "session": return "Allow this session"
-        case "always": return "Always allow"
-        case "deny": return "Deny"
+        case "once": return "Erlauben"
+        case "session": return "Für Sitzung erlauben"
+        case "always": return "Immer erlauben"
+        case "deny": return "Ablehnen"
         default: return choice
         }
     }
@@ -82,6 +82,9 @@ public struct HermesRun: Codable, Equatable, Identifiable, Sendable {
     public var pending: [HermesPrompt]
     /// Background runs (the daily journal): no bubble, not in the phone's chat.
     public var quiet: Bool?
+    /// Workspace runs use the same Hub profile as the live screen.
+    public var viaHub: Bool?
+    public var workspaceThreadID: UUID?
 
     public init(id: String, prompt: String, status: Status = .sending, started: Date = Date()) {
         self.id = id; self.prompt = prompt; self.status = status; self.started = started; self.pending = []
@@ -148,4 +151,69 @@ public struct HermesSync: Codable, Equatable, Sendable {
         self.available = available; self.problem = problem; self.mode = mode; self.runs = runs
         self.activityAvailable = activityAvailable; self.today = today
     }
+}
+
+/// Per-turn overrides for Hermes' native API. Missing values use the gateway defaults.
+public struct HermesChatOptions: Codable, Equatable, Sendable {
+    public var provider: String?
+    public var model: String?
+    public var thinking: Thinking?
+
+    public init(provider: String? = nil, model: String? = nil, thinking: Thinking? = nil) {
+        self.provider = provider
+        self.model = model
+        self.thinking = thinking
+    }
+
+    public enum Thinking: String, CaseIterable, Codable, Sendable {
+        case none, minimal, low, medium, high, xhigh, max, ultra
+
+        public var title: String {
+            switch self {
+            case .none: return "Aus"
+            case .xhigh: return "Extra hoch"
+            case .low: return "Niedrig"
+            case .medium: return "Mittel"
+            case .high: return "Hoch"
+            default: return rawValue.capitalized
+            }
+        }
+    }
+
+    public var requestFields: [String: Any] {
+        var fields: [String: Any] = [:]
+        if let model { fields["model"] = model }
+        if let provider { fields["provider"] = provider }
+        if let thinking { fields["model_options"] = ["reasoning_effort": thinking.rawValue] }
+        return fields
+    }
+}
+
+public struct HermesModelCatalog: Decodable, Sendable {
+    public struct Provider: Decodable, Identifiable, Sendable {
+        public struct Capability: Decodable, Sendable { public let reasoning: Bool? }
+
+        public let slug: String
+        public let name: String
+        public let models: [String]
+        public let capabilities: [String: Capability]?
+        public var id: String { slug }
+    }
+
+    public let providers: [Provider]
+    public let model: String?
+    public let provider: String?
+}
+
+public enum HermesLiveTool: String, Codable, Sendable {
+    case browser, computer
+
+    public init?(tool: String) {
+        if tool.hasPrefix("browser_") { self = .browser }
+        else if tool == "computer_use" { self = .computer }
+        else { return nil }
+    }
+
+    public var title: String { self == .browser ? "Browser Use" : "Computer Use" }
+    public var symbol: String { self == .browser ? "globe" : "display" }
 }
