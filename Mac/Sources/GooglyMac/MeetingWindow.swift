@@ -1,12 +1,13 @@
 import AppKit
-import CoreGraphics
 import Charts
+import CoreGraphics
 import GooglyShared
 import SwiftUI
 
 @available(macOS 15, *)
 @MainActor
 final class MeetingWindow: ObservableObject {
+    typealias DrawingEvent = MeetingDrawingEvent
     typealias Session = MeetingSession
 
     struct ToastMessage: Identifiable, Equatable {
@@ -71,12 +72,12 @@ final class MeetingWindow: ObservableObject {
     @Published private(set) var status = ""
     @Published private(set) var error: String?
     @Published private(set) var visualWarning: String?
-    @Published private(set) var takingScreenshot = false
     @Published var toast: ToastMessage?
     @Published private(set) var recording = false
     @Published private(set) var changingCapture = false
     @Published private(set) var transcribing = false
     @Published private(set) var answering = false
+    @Published private(set) var takingScreenshot = false
     @Published private(set) var extractingTasks = false
     @Published private(set) var sendingToT3 = false
     @Published private(set) var sendingTaskID: UUID?
@@ -151,6 +152,7 @@ final class MeetingWindow: ObservableObject {
     private var notesSaveTask: Task<Void, Never>?
     private var toastClearTask: Task<Void, Never>?
     private var failedClips = Set<String>()
+    private var lastSpeechDetected = Date()
     private var hasSyncedLibraryOnce = false
 
     init() {
@@ -191,13 +193,24 @@ final class MeetingWindow: ObservableObject {
             session = latest
             syncSelectedProjectFromSession()
         }
-        startClockIfNeeded()
         Task { await refreshTargets() }
+        startClockIfNeeded()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         if openT3Composer {
             railTab = .tasks
             self.openT3Composer()
+        }
+    }
+
+    func refreshTargets(preferWindowID: CGWindowID? = nil) async {
+        let targets = await MeetingAudio.availableTargets()
+        availableTargets = targets
+        if let preferWindowID,
+           let matched = targets.first(where: { $0.windowID == preferWindowID }) {
+            selectedTarget = matched
+        } else {
+            selectedTarget = targets.first { $0.id == selectedTarget.id } ?? .display
         }
     }
 
@@ -276,17 +289,6 @@ final class MeetingWindow: ObservableObject {
     }
 
     // MARK: Session lifecycle & time tracking
-
-    func refreshTargets(preferWindowID: CGWindowID? = nil) async {
-        let targets = await MeetingAudio.availableTargets()
-        availableTargets = targets
-        if let preferWindowID,
-           let matched = targets.first(where: { $0.windowID == preferWindowID }) {
-            selectedTarget = matched
-        } else {
-            selectedTarget = targets.first { $0.id == selectedTarget.id } ?? .display
-        }
-    }
 
     func select(_ target: Session?) {
         guard !busy else {
@@ -372,8 +374,8 @@ final class MeetingWindow: ObservableObject {
 
     func start(preferredWindowID: CGWindowID? = nil) async {
         guard !busy else { return }
-        guard Keychain.get(.openai) != nil else {
-            error = "Füge deinen OpenAI-Schlüssel im Bluey-Menü hinzu (oder starte „Nur Timer“ ohne Transkription)."
+        if let problem = TranscriptionService.readinessError() {
+            error = problem
             return
         }
         flushPendingNoteSave()
@@ -426,13 +428,14 @@ final class MeetingWindow: ObservableObject {
                 save()
             }
             var activeSession = newSession
-            activeSession.captureTargetName = visual.enabled ? recorder.resolvedTargetName : nil
+            activeSession.captureTargetName = visual.enabled ? (recorder.resolvedTargetName ?? visual.target.displayName) : nil
             session = activeSession
             centerTab = .transcript
             failedClips.removeAll()
+            lastSpeechDetected = Date()
             self.recorder = recorder
             recording = true
-            onRecordingStateChanged?(true, start)
+            onRecordingStateChanged?(true, activeSession.started)
             status = ""
             now = start
             startClockIfNeeded()
@@ -440,7 +443,8 @@ final class MeetingWindow: ObservableObject {
             reloadArchive(syncExports: false)
             captureTimer = Task { [weak self] in
                 while !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(18)) } catch { return }
+                    let seconds = Settings.shared.meetingChunkSeconds
+                    do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
                     await self?.collect()
                 }
             }
@@ -536,9 +540,11 @@ final class MeetingWindow: ObservableObject {
             while let clip = self.session?.clips.first(where: { $0.transcript == nil && !failedClips.contains($0.id) }) {
                 do {
                     let url = session.audioFolder.appendingPathComponent(clip.filename)
-                    let segments = try await MeetingNotes.plain(Data(contentsOf: url))
+                    let segments = try await MeetingNotes.plain(fileURL: url)
+                    let text = segments.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !text.isEmpty { self.lastSpeechDetected = Date() }
                     if let index = self.session?.clips.firstIndex(where: { $0.id == clip.id }) {
-                        self.session?.clips[index].transcript = segments.map(\.text).joined(separator: " ")
+                        self.session?.clips[index].transcript = text
                         save()
                     }
                 } catch {
@@ -549,6 +555,11 @@ final class MeetingWindow: ObservableObject {
             transcription = nil
             transcribing = false
             reloadArchive(syncExports: false)
+            let silentLimitMin = Settings.shared.meetingAutoStopSilentMinutes
+            if self.recording, silentLimitMin > 0,
+               Date().timeIntervalSince(self.lastSpeechDetected) >= Double(silentLimitMin * 60) {
+                await self.stop(failure: "Aufnahme automatisch gestoppt nach \(silentLimitMin) Min. Stille.")
+            }
         }
     }
 
@@ -664,8 +675,8 @@ final class MeetingWindow: ObservableObject {
 
     func extractTasksFromMeeting() async {
         guard !extractingTasks, let session else { return }
-        guard Keychain.get(.openai) != nil else {
-            error = "Für die automatische Aufgaben-Erkennung wird dein OpenAI-Schlüssel benötigt."
+        if Settings.shared.llmProvider == .openai, Keychain.get(.openai) == nil {
+            error = "Für die automatische Aufgaben-Erkennung mit OpenAI wird dein OpenAI-Schlüssel benötigt (oder wechsle den KI-Anbieter in den Einstellungen)."
             return
         }
         let sourceText = [
@@ -692,7 +703,7 @@ final class MeetingWindow: ObservableObject {
         do {
             let response = try await ChatEngine.stream(.init(
                 messages: [messageWithAttachment],
-                model: ChatEngine.fallbackModel,
+                model: ChatEngine.defaultModelID,
                 webSearch: false,
                 context: "Extrahiere umsetzbare Aufgaben für den Nutzer aus den Meeting-Daten. Antworte ausschließlich mit einem JSON-Array.",
                 attachmentData: { $0 == attachment.id ? data : nil }
@@ -890,74 +901,25 @@ final class MeetingWindow: ObservableObject {
         }
     }
 
-    func openInT3Code(projectPath: String? = nil) {
-        let path = projectPath ?? selectedProject?.path
-        Task { await T3CodeBridge.openInT3Code(projectPath: path) }
+    func openVideo() {
+        if let url = session?.videoURL, FileManager.default.fileExists(atPath: url.path) {
+            NSWorkspace.shared.open(url)
+        }
     }
 
-    // MARK: Bluey Q&A
-
-    func ask(_ question: String) async -> Bool {
-        guard !answering, !changingCapture else { return false }
-        if session == nil { startNewTimedMeeting() }
-        answering = true
-        answer = ""
-        error = nil
-        railTab = .assistant
-        defer { answering = false; answer = "" }
-
-        if recording {
-            await collecting?.value
-            await collect()
-        }
-        await transcription?.value
-
-        let fullTranscript = session?.transcript ?? ""
-        let manual = session?.manualNotes.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard let session, !fullTranscript.isEmpty || !manual.isEmpty else {
-            error = "Für die Rückfrage sind noch weder Transkript noch Notizen verfügbar."
-            return false
-        }
-
-        let message = ChatMessage(role: .user, text: question)
-        var contextText = ""
-        if !manual.isEmpty { contextText += "Eigene Meeting-Notizen:\n\(manual)\n\n" }
-        if !fullTranscript.isEmpty { contextText += "Call-Transkript:\n\(String(fullTranscript.suffix(195_000)))" }
-
-        let attachmentBytes = Data(contextText.utf8)
-        let attachment = ChatAttachment(name: "Meeting-Kontext.txt", mime: "text/plain", size: attachmentBytes.count)
-        var questionWithContext = message
-        questionWithContext.attachments = [attachment]
-
-        do {
-            let response = try await ChatEngine.stream(.init(
-                messages: session.messages + [questionWithContext],
-                model: ChatEngine.fallbackModel,
-                webSearch: false,
-                context: "Beantworte die Rückfrage auf Grundlage des beigefügten Call-Transkripts und der Meeting-Notizen. "
-                    + "Nenne die Zeit aus dem Transkript und zitiere die relevante Stelle. "
-                    + "Wenn der Call die Frage offenlässt oder das Transkript lückenhaft ist, sage das. "
-                    + "Schlage bei einer offenen Frage einen kurzen Satz vor, den der Nutzer im Call sagen kann.",
-                attachmentData: { $0 == attachment.id ? attachmentBytes : nil }
-            ), onText: { [weak self] in self?.answer = $0 })
-            guard !response.isEmpty else { throw ChatEngine.Failure.message("Bluey hat keine Antwort erhalten.") }
-            self.session?.messages += [message, ChatMessage(role: .assistant, text: response)]
-            save()
-            reloadArchive(syncExports: false)
-            return true
-        } catch {
-            self.error = error.localizedDescription
-            return false
-        }
+    func openScreenshot(_ shot: MeetingAudio.Screenshot) {
+        guard let session else { return }
+        NSWorkspace.shared.open(session.folder.appendingPathComponent(shot.filename))
     }
 
     /// Context block for Hermes so it can inspect the live meeting transcript and screenshots directly.
     func hermesContextSummary() -> String? {
         if recording, let session {
             let started = session.started.formatted(date: .omitted, time: .shortened)
+            let chunkSeconds = Settings.shared.meetingChunkSeconds
             var parts = [
                 "Active meeting recording in progress (started \(started)).",
-                "Live transcript & notes file (updated every ~18s): \(session.notesURL.path)"
+                "Live transcript & notes file (updated every ~\(chunkSeconds)s): \(session.notesURL.path)"
             ]
             if let target = session.captureTargetName {
                 parts.append("Captured screen source: \(target).")
@@ -976,6 +938,12 @@ final class MeetingWindow: ObservableObject {
             return "Meeting notes & transcripts folder: ~/Documents/Bluey Notes/ (most recent: \(recent.notesURL.path))."
         }
         return "Meeting notes & transcripts folder: ~/Documents/Bluey Notes/."
+    }
+
+    func openDrawingFile(_ filename: String) {
+        guard let session else { return }
+        let url = session.drawingsFolder.appendingPathComponent(filename)
+        NSWorkspace.shared.open(url)
     }
 
     /// Saves a live Huion / screen drawing with its exact video timecode into the active meeting session.
@@ -1034,7 +1002,72 @@ final class MeetingWindow: ObservableObject {
         save()
     }
 
+    func openInT3Code(projectPath: String? = nil) {
+        let path = projectPath ?? selectedProject?.path
+        Task { await T3CodeBridge.openInT3Code(projectPath: path) }
+    }
+
+    // MARK: Bluey Q&A
+
+    func ask(_ question: String) async -> Bool {
+        guard !answering, !changingCapture else { return false }
+        if session == nil { startNewTimedMeeting() }
+        answering = true
+        answer = ""
+        error = nil
+        railTab = .assistant
+        defer { answering = false; answer = "" }
+
+        if recording {
+            await collecting?.value
+            await collect()
+        }
+        await transcription?.value
+
+        let fullTranscript = session?.transcript ?? ""
+        let manual = session?.manualNotes.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard let session, !fullTranscript.isEmpty || !manual.isEmpty else {
+            error = "Für die Rückfrage sind noch weder Transkript noch Notizen verfügbar."
+            return false
+        }
+
+        let message = ChatMessage(role: .user, text: question)
+        var contextText = ""
+        if !manual.isEmpty { contextText += "Eigene Meeting-Notizen:\n\(manual)\n\n" }
+        if !fullTranscript.isEmpty { contextText += "Call-Transkript:\n\(String(fullTranscript.suffix(195_000)))" }
+
+        let attachmentBytes = Data(contextText.utf8)
+        let attachment = ChatAttachment(name: "Meeting-Kontext.txt", mime: "text/plain", size: attachmentBytes.count)
+        var questionWithContext = message
+        questionWithContext.attachments = [attachment]
+
+        do {
+            let response = try await ChatEngine.stream(.init(
+                messages: session.messages + [questionWithContext],
+                model: ChatEngine.defaultModelID,
+                webSearch: false,
+                context: "Beantworte die Rückfrage auf Grundlage des beigefügten Call-Transkripts und der Meeting-Notizen. "
+                    + "Nenne die Zeit aus dem Transkript und zitiere die relevante Stelle. "
+                    + "Wenn der Call die Frage offenlässt oder das Transkript lückenhaft ist, sage das. "
+                    + "Schlage bei einer offenen Frage einen kurzen Satz vor, den der Nutzer im Call sagen kann.",
+                attachmentData: { $0 == attachment.id ? attachmentBytes : nil }
+            ), onText: { [weak self] in self?.answer = $0 })
+            guard !response.isEmpty else { throw ChatEngine.Failure.message("Bluey hat keine Antwort erhalten.") }
+            self.session?.messages += [message, ChatMessage(role: .assistant, text: response)]
+            save()
+            reloadArchive(syncExports: false)
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
     // MARK: Folders & files
+
+    func reveal() {
+        revealSessionFolder()
+    }
 
     func revealSessionFolder() {
         if let session {
@@ -1111,7 +1144,6 @@ final class MeetingWindow: ObservableObject {
     }
 
     // MARK: Persistence
-
     private func save() {
         guard let session else { return }
         do {
@@ -1596,7 +1628,7 @@ private struct MeetingView: View {
             captureControls
             Divider().overlay(MeetingStyle.border)
 
-            if !model.status.isEmpty || model.transcribing || model.error != nil || model.visualWarning != nil {
+            if !model.status.isEmpty || model.transcribing || model.visualWarning != nil || model.error != nil {
                 statusStrip
             }
 
@@ -1637,6 +1669,10 @@ private struct MeetingView: View {
                     .popover(isPresented: $showCaptureSettings) {
                         captureSettings
                     }
+                Text(Settings.shared.transcriptionProvider.shortBadge)
+                    .font(.plexMono(10))
+                    .foregroundStyle(Theme.accentLight)
+                    .help("Transkriptionsanbieter")
                 Text(model.recordVideo ? "Mit Bildschirmvideo" : (model.autoScreenshots ? "Mit Folien-Screenshots" : "Nur Audio"))
                     .font(.plexSans(11))
                     .foregroundStyle(MeetingStyle.inkMuted)
@@ -1676,7 +1712,7 @@ private struct MeetingView: View {
                 .labelStyle(.iconOnly)
                 .help("Fensterliste aktualisieren")
             }
-            Text("Bluey nimmt Mac-Audio und Mikrofon auf und sendet Audio zur Transkription an OpenAI. Informiere die Teilnehmenden vor dem Start.")
+            Text("Bluey nimmt Mac-Audio und Mikrofon auf. Die Transkription läuft über den gewählten Anbieter. Informiere die Teilnehmenden vor dem Start.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -1781,6 +1817,15 @@ private struct MeetingView: View {
                         .foregroundStyle(MeetingStyle.inkMuted)
                 }
             }
+            if let warning = model.visualWarning {
+                HStack(spacing: 8) {
+                    Image(systemName: "video.slash").foregroundStyle(Theme.yellow)
+                    Text(warning)
+                        .font(.plexSans(12))
+                        .foregroundStyle(Theme.yellow)
+                        .textSelection(.enabled)
+                }
+            }
             if let err = model.error {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.peach)
@@ -1796,11 +1841,6 @@ private struct MeetingView: View {
                             .controlSize(.small)
                     }
                 }
-            }
-            if let warning = model.visualWarning {
-                Label(warning, systemImage: "exclamationmark.triangle")
-                    .font(.plexSans(12))
-                    .foregroundStyle(Theme.peach)
             }
         }
         .padding(.horizontal, 18)
@@ -1832,6 +1872,15 @@ private struct MeetingView: View {
                 Text(model.notesSaveState)
                     .font(.plexSans(11))
                     .foregroundStyle(MeetingStyle.inkMuted)
+            }
+            if model.session?.videoURL != nil {
+                Button { model.openVideo() } label: {
+                    Label("Video", systemImage: "play.rectangle")
+                        .font(.plexSans(11.5))
+                        .foregroundStyle(Theme.accentLight)
+                }
+                .buttonStyle(.plain)
+                .help("Aufgenommenes Bildschirmvideo abspielen")
             }
             Button { model.revealSessionFolder() } label: {
                 Label("Meeting-Ordner", systemImage: "folder")
@@ -1910,6 +1959,12 @@ private struct MeetingView: View {
             .padding(.horizontal, 18)
             .padding(.bottom, 10)
 
+            if let session = model.session, !session.screenshots.isEmpty || !session.drawings.isEmpty {
+                sessionMediaStrip(session)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 10)
+            }
+
             if allClips.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: model.recording ? "waveform" : "mic.badge.plus")
@@ -1918,9 +1973,11 @@ private struct MeetingView: View {
                     Text(model.recording ? "Bluey hört zu …" : "Noch kein Transkript")
                         .font(.fredoka(19))
                         .foregroundStyle(.white)
+                    let chunkSeconds = Settings.shared.meetingChunkSeconds
+                    let provider = Settings.shared.transcriptionProvider.shortBadge
                     Text(model.recording
-                         ? "Audio wird alle 18 Sekunden automatisch gespeichert und transkribiert. Du kannst schon unter „Notizen“ mitschreiben."
-                         : "Starte mit ⌘R eine Aufnahme (Mac-Audio + Mikrofon) oder wechsle mit ⌘2 in deine eigenen Notizen. Informiere Teilnehmende vor einer Aufnahme.")
+                         ? "Audio wird alle \(chunkSeconds) Sekunden automatisch gespeichert und transkribiert (\(provider)). Du kannst schon unter „Notizen“ mitschreiben."
+                         : "Starte mit ⌘R eine Aufnahme (Mac-Audio + Mikrofon, \(provider)) oder wechsle mit ⌘2 in deine eigenen Notizen. Informiere Teilnehmende vor einer Aufnahme.")
                         .font(.plexSans(13))
                         .foregroundStyle(MeetingStyle.inkMuted)
                         .multilineTextAlignment(.center)
@@ -1962,6 +2019,88 @@ private struct MeetingView: View {
                     }
                     .padding(.horizontal, 18)
                     .padding(.bottom, 18)
+                }
+            }
+        }
+    }
+
+    private func sessionMediaStrip(_ session: MeetingSession) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(session.screenshots) { shot in
+                    let url = session.folder.appendingPathComponent(shot.filename)
+                    Button { model.openScreenshot(shot) } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let nsImage = NSImage(contentsOf: url) {
+                                Image(nsImage: nsImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 112, height: 64)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                            }
+                            HStack(spacing: 4) {
+                                Image(systemName: shot.manual ? "camera.fill" : "rectangle.on.rectangle")
+                                    .font(.system(size: 9))
+                                Text(shot.captured.formatted(date: .omitted, time: .shortened))
+                                    .font(.plexMono(9.5))
+                            }
+                            .foregroundStyle(MeetingStyle.inkMuted)
+                        }
+                        .padding(6)
+                        .background(MeetingStyle.surface, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(MeetingStyle.border))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Screenshot öffnen")
+                }
+
+                ForEach(session.drawings) { item in
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 5) {
+                            Text(item.timecode)
+                                .font(.plexMono(9.5).weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Theme.red.opacity(0.8), in: Capsule())
+                            Text(item.source)
+                                .font(.plexSans(10).weight(.medium))
+                                .foregroundStyle(MeetingStyle.inkMuted)
+                            Spacer(minLength: 4)
+                            Text("\(item.strokeCount) Str.")
+                                .font(.plexMono(9.5))
+                                .foregroundStyle(MeetingStyle.inkMuted)
+                        }
+                        if let png = item.pngFilename,
+                           let img = NSImage(contentsOf: session.drawingsFolder.appendingPathComponent(png)) {
+                            Button { model.openDrawingFile(png) } label: {
+                                Image(nsImage: img)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 118, height: 48)
+                                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Zeichnung in Vorschau öffnen")
+                        }
+                        HStack(spacing: 6) {
+                            Button("Öffnen") { model.openDrawingFile(item.pngFilename ?? item.svgFilename) }
+                                .font(.plexSans(10))
+                                .buttonStyle(.plain)
+                                .foregroundStyle(Theme.accentLight)
+                            if let nid = item.noteID {
+                                Button("Zur Notiz") { model.onOpenNote?(nid) }
+                                    .font(.plexSans(10))
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(Theme.blue)
+                            }
+                        }
+                    }
+                    .padding(7)
+                    .frame(width: 148)
+                    .background(MeetingStyle.surface, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(MeetingStyle.border))
                 }
             }
         }
@@ -2132,11 +2271,6 @@ private struct MeetingView: View {
                                             .font(.plexSans(11))
                                             .foregroundStyle(MeetingStyle.inkMuted.opacity(0.6))
                                     }
-                                    if let noteID = item.noteID {
-                                        Button("Stift-Notiz öffnen", systemImage: "note.text") { model.onOpenNote?(noteID) }
-                                            .labelStyle(.iconOnly)
-                                            .help("Stift-Notiz öffnen")
-                                    }
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 9)
@@ -2159,7 +2293,6 @@ private struct MeetingView: View {
         var icon: String
         var url: URL
         var exists: Bool
-        var noteID: UUID? = nil
     }
 
     private func sessionFileRows(for session: MeetingSession) -> [SessionFileRow] {
@@ -2177,25 +2310,14 @@ private struct MeetingView: View {
             let url = folder.appendingPathComponent(name)
             return SessionFileRow(title: title, detail: detail, icon: icon, url: url, exists: fm.fileExists(atPath: url.path))
         }
-        let video = session.videoURL ?? folder.appendingPathComponent("video.mp4")
-        if !(model.changingCapture || model.recording), fm.fileExists(atPath: video.path) {
-            rows.insert(SessionFileRow(title: "Bildschirmvideo", detail: video.lastPathComponent, icon: "video", url: video, exists: true), at: 0)
+        // Surface screenshots or video if present from earlier sessions
+        let screenshots = folder.appendingPathComponent("screenshots")
+        if fm.fileExists(atPath: screenshots.path) {
+            rows.append(SessionFileRow(title: "Folien / Screenshots", detail: "screenshots/", icon: "photo.on.rectangle", url: screenshots, exists: true))
         }
-        let screenshotsFolder = folder.appendingPathComponent("screenshots")
-        if session.screenshots.isEmpty, fm.fileExists(atPath: screenshotsFolder.path) {
-            rows.append(SessionFileRow(title: "Folien / Screenshots", detail: "screenshots/", icon: "photo.on.rectangle", url: screenshotsFolder, exists: true))
-        }
-        for shot in session.screenshots {
-            let url = folder.appendingPathComponent(shot.filename)
-            rows.append(SessionFileRow(title: shot.label ?? (shot.manual ? "Screenshot" : "Folie / Bildschirmänderung"),
-                                       detail: shot.captured.formatted(date: .omitted, time: .standard),
-                                       icon: "photo", url: url, exists: fm.fileExists(atPath: url.path)))
-        }
-        for drawing in session.drawings {
-            let url = session.drawingsFolder.appendingPathComponent(drawing.pngFilename ?? drawing.svgFilename)
-            rows.append(SessionFileRow(title: "Zeichnung · \(drawing.source)", detail: drawing.timecode,
-                                       icon: "pencil.and.scribble", url: url, exists: fm.fileExists(atPath: url.path),
-                                       noteID: drawing.noteID))
+        let video = folder.appendingPathComponent("video.mp4")
+        if fm.fileExists(atPath: video.path) {
+            rows.append(SessionFileRow(title: "Video-Aufnahme", detail: "video.mp4", icon: "video", url: video, exists: true))
         }
         return rows
     }

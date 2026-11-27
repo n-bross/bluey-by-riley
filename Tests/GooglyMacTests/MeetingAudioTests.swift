@@ -128,7 +128,7 @@ final class MeetingAudioTests: XCTestCase {
 
     @MainActor
     func testSessionRoundTripsDrawingsAndScreenshotsTogether() throws {
-        let drawing = DrawingEvent(videoOffsetSeconds: 12, source: "Notiz", svgFilename: "note.svg", strokeCount: 1)
+        let drawing = MeetingDrawingEvent(videoOffsetSeconds: 12, source: "Notiz", svgFilename: "note.svg", strokeCount: 1)
         let shot = MeetingAudio.Screenshot(filename: "slide.jpg", captured: Date(), manual: false)
         let session = MeetingSession(drawings: [drawing], screenshots: [shot], videoFilename: "video.mp4")
 

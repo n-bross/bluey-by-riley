@@ -208,6 +208,19 @@ struct AppShell: View {
         call.requestToken = { [link] context, done in
             link.request(Packet(command: "callToken", text: context)) { reply in done(reply?.text) }
         }
+        call.runCallTurn = { [link] audioWAV, text, done in
+            link.request(Packet(command: "callTurn", audio: audioWAV?.base64EncodedString(), text: text)) { reply in
+                let parsed: VoiceTurnReply
+                if let raw = reply?.text, let data = raw.data(using: .utf8),
+                   let decoded = try? JSONDecoder().decode(VoiceTurnReply.self, from: data) {
+                    parsed = decoded
+                } else {
+                    parsed = VoiceTurnReply(reply: reply?.text ?? "")
+                }
+                let audio = reply?.audio.flatMap { Data(base64Encoded: $0) }
+                done(parsed, audio)
+            }
+        }
         call.runTool = { [link] name, arguments, done in
             link.request(Packet(command: "tool", tool: name, text: arguments)) { reply in
                 done(reply?.text ?? "The Mac didn't answer.", reply?.image)
@@ -258,6 +271,16 @@ struct AppShell: View {
     private func wireLiveVoice(workspace: PhoneWorkspace) {
         live.requestToken = { [link] done in
             link.request(Packet(command: "realtimeToken")) { reply in done(reply?.text) }
+        }
+        live.runVoiceTurn = { [link] audioWAV, text, done in
+            link.request(Packet(command: "voiceTurn", audio: audioWAV?.base64EncodedString(), text: text)) { reply in
+                if let raw = reply?.text, let data = raw.data(using: .utf8),
+                   let decoded = try? JSONDecoder().decode(VoiceTurnReply.self, from: data) {
+                    done(decoded)
+                } else {
+                    done(VoiceTurnReply(reply: reply?.text ?? "Der Mac hat nicht geantwortet."))
+                }
+            }
         }
         live.runTool = { [link] name, arguments, done in
             link.request(Packet(command: "tool", tool: name, text: arguments)) { reply in

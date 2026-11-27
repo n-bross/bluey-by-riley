@@ -137,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         focus.startService()
+        AIServices.hermes = bridge.hermes
         bridge.start()
         bridge.journal.meetingsHistory = { [weak self] in
             if #available(macOS 15, *) { return self?.meetings?.allTimeSummaries ?? [] }
@@ -217,10 +218,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.updateNotchPresence() }
-        }
-
-        if Keychain.get(.openai) == nil {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.editKeys() }
         }
     }
 
@@ -917,7 +914,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openMeetingToT3() {
         if #available(macOS 15, *) { meetings?.show(openT3Composer: true) }
     }
-
     @objc private func openNotes() {
         MeetingNotes.ensureLibraryFolders()
         NSWorkspace.shared.open(MeetingNotes.root)
@@ -1113,6 +1109,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.activityRunning = { [weak self] in self?.bridge.activityRunning ?? false }
         model.startActivityWatch = {
             NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/Applications/ActivityWatch.app"), configuration: NSWorkspace.OpenConfiguration())
+        }
+        model.servicesChanged = { [weak self] in
+            self?.workspace.refreshModels()
+            self?.restartIfAwake()
         }
         return model
     }()

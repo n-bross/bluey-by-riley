@@ -35,7 +35,7 @@ final class MeetingWorkflowTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let start = Date(timeIntervalSince1970: 1_764_150_000)
         let shot = MeetingAudio.Screenshot(filename: "screenshots/slide.jpg", captured: start.addingTimeInterval(30), manual: true)
-        let drawing = DrawingEvent(timestamp: start.addingTimeInterval(45), videoOffsetSeconds: 45,
+        let drawing = MeetingDrawingEvent(timestamp: start.addingTimeInterval(45), videoOffsetSeconds: 45,
                                    source: "Bildschirm", svgFilename: "screen.svg", pngFilename: "screen.png",
                                    strokeCount: 3, ocrText: "Skizze")
         let session = MeetingSession(title: "Planung", captureTargetName: "Teams", started: start,

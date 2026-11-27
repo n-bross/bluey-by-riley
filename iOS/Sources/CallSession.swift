@@ -25,8 +25,10 @@ final class CallSession: NSObject, ObservableObject {
 
     var isActive: Bool { phase != .idle && phase != .ended }
 
-    /// (chat context) → short-lived key from the Mac.
+    /// (chat context) → session config envelope / short-lived key from the Mac.
     var requestToken: ((String?, @escaping (String?) -> Void) -> Void)?
+    /// Executes one modular (`localHermes`) call turn on the Mac: (audioWAV, textJSON) → (reply, optional TTS audio).
+    var runCallTurn: ((Data?, String?, @escaping (VoiceTurnReply, Data?) -> Void) -> Void)?
     /// Runs one of his Mac tools: (name, JSON arguments) → (output, optional JPEG base64).
     var runTool: ((String, String, @escaping (String, String?) -> Void) -> Void)?
     /// The call ended: what was said, for the chat.
@@ -34,6 +36,14 @@ final class CallSession: NSObject, ObservableObject {
     var onChange: (() -> Void)?
 
     private var socket: URLSessionWebSocketTask?
+    private var activeConfig = VoiceSessionConfig(provider: "localHermes")
+    private var callContext: String?
+    private let synthesizer = AVSpeechSynthesizer()
+    private var ttsPlayer: AVAudioPlayer?
+    private var modularBuffer = Data()
+    private var modularSpeechStartedAt: Date?
+    private var modularLastVoiceAt: Date?
+    private var modularTurnInFlight = false
     private var engine: AVAudioEngine { BlueyAudio.engine }
     private let player = AVAudioPlayerNode()
     private var observers: [NSObjectProtocol] = []
@@ -53,8 +63,11 @@ final class CallSession: NSObject, ObservableObject {
     func start(threadID: UUID?, context: String?) {
         guard !isActive else { return }
         self.threadID = threadID
+        self.callContext = context
         lines = []; caption = ""; heard = ""; error = nil; muted = false
+        modularBuffer = Data(); modularSpeechStartedAt = nil; modularLastVoiceAt = nil; modularTurnInFlight = false
         startedAt = Date()
+        synthesizer.delegate = self
         setPhase(.connecting)
         AVAudioApplication.requestRecordPermission { granted in
             Task { @MainActor in
@@ -64,7 +77,7 @@ final class CallSession: NSObject, ObservableObject {
                 requestToken(context) { token in
                     Task { @MainActor in
                         guard self.phase == .connecting else { return }
-                        guard let token else { self.fail("Der Mac konnte den Anruf nicht starten. Ist er verbunden und der OpenAI-Schlüssel gesetzt?"); return }
+                        guard let token else { self.fail("Der Mac konnte den Anruf nicht starten. Prüfe Einstellungen → Services auf dem Mac."); return }
                         self.connect(token)
                     }
                 }
@@ -82,6 +95,9 @@ final class CallSession: NSObject, ObservableObject {
         socket = nil
         socketReady = false
         micOpen = false
+        synthesizer.stopSpeaking(at: .immediate)
+        ttsPlayer?.stop(); ttsPlayer = nil
+        modularBuffer = Data(); modularSpeechStartedAt = nil; modularLastVoiceAt = nil; modularTurnInFlight = false
         stopAudio()
         shareTimer?.invalidate(); shareTimer = nil
         if !transcriptDraft.isEmpty { lines.append(Line(fromUser: false, text: transcriptDraft)); transcriptDraft = "" }
@@ -121,13 +137,61 @@ final class CallSession: NSObject, ObservableObject {
 
     // MARK: Connection
 
-    private func connect(_ token: String) {
-        var request = URLRequest(url: URL(string: "wss://api.openai.com/v1/realtime?model=\(LiveVoice.model)")!)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let socket = URLSession.shared.webSocketTask(with: request)
-        self.socket = socket
-        socket.resume()
-        receive(on: socket)
+    private func connect(_ rawToken: String) {
+        let cfg = VoiceSessionConfig.decodeEnvelope(rawToken)
+        activeConfig = cfg
+        switch cfg.provider {
+        case "localHermes":
+            socket = nil
+            socketReady = true
+            micOpen = !muted
+            let greeting = "Hi! Ich bin da – woran wollen wir arbeiten?"
+            caption = greeting
+            lines.append(Line(fromUser: false, text: greeting))
+            speakLocally(greeting)
+
+        case "geminiLive":
+            guard let apiKey = cfg.token, !apiKey.isEmpty,
+                  let url = URL(string: "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=\(apiKey)") else {
+                fail("Gemini API-Key fehlt. Prüfe Einstellungen → Services auf dem Mac.")
+                return
+            }
+            let socket = URLSession.shared.webSocketTask(with: URLRequest(url: url))
+            self.socket = socket
+            socket.resume()
+            receive(on: socket)
+            let modelName = cfg.model ?? "gemini-2.5-flash-native-audio-preview"
+            let fullModel = modelName.hasPrefix("models/") ? modelName : "models/\(modelName)"
+            var setup: [String: Any] = [
+                "model": fullModel,
+                "generationConfig": [
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": [
+                        "voiceConfig": [
+                            "prebuiltVoiceConfig": ["voiceName": cfg.voice ?? "Aoede"]
+                        ]
+                    ],
+                ],
+            ]
+            if let instr = cfg.instructions, !instr.isEmpty {
+                setup["systemInstruction"] = ["parts": [["text": instr]]]
+            }
+            let decls = VoiceAudioCodec.geminiFunctionDeclarations(from: cfg.toolsJSON)
+            if !decls.isEmpty {
+                setup["tools"] = [["functionDeclarations": decls]]
+            }
+            send(["setup": setup])
+
+        default:
+            let token = cfg.token ?? rawToken
+            let model = cfg.model ?? LiveVoice.model
+            var request = URLRequest(url: URL(string: "wss://api.openai.com/v1/realtime?model=\(model)")!)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let socket = URLSession.shared.webSocketTask(with: request)
+            self.socket = socket
+            socket.resume()
+            receive(on: socket)
+        }
     }
 
     private func send(_ event: [String: Any]) {
@@ -144,6 +208,9 @@ final class CallSession: NSObject, ObservableObject {
                 case .success(.string(let text)):
                     if let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] { self.handle(json) }
                     self.receive(on: socket)
+                case .success(.data(let data)):
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { self.handle(json) }
+                    self.receive(on: socket)
                 case .success:
                     self.receive(on: socket)
                 case .failure(let error):
@@ -155,6 +222,10 @@ final class CallSession: NSObject, ObservableObject {
     }
 
     private func handle(_ event: [String: Any]) {
+        if activeConfig.provider == "geminiLive" {
+            handleGemini(event)
+            return
+        }
         guard let type = event["type"] as? String else { return }
         switch type {
         case "session.created":
@@ -217,6 +288,192 @@ final class CallSession: NSObject, ObservableObject {
 
         default:
             break
+        }
+    }
+
+    private func handleGemini(_ event: [String: Any]) {
+        if event["setupComplete"] != nil {
+            socketReady = true
+            micOpen = !muted
+            setPhase(.listening)
+            send([
+                "clientContent": [
+                    "turns": [["role": "user", "parts": [["text": "Greet the user warmly in one short sentence and ask what they want to do."]]]],
+                    "turnComplete": true,
+                ]
+            ])
+            return
+        }
+        if let server = event["serverContent"] as? [String: Any] {
+            if server["interrupted"] as? Bool == true {
+                stopPlayback()
+                setPhase(.listening)
+            }
+            if let modelTurn = server["modelTurn"] as? [String: Any],
+               let parts = modelTurn["parts"] as? [[String: Any]] {
+                for part in parts {
+                    if let text = part["text"] as? String, !text.isEmpty {
+                        transcriptDraft += text
+                        caption = transcriptDraft
+                    }
+                    if let inline = part["inlineData"] as? [String: Any],
+                       let b64 = inline["data"] as? String,
+                       let pcm = Data(base64Encoded: b64) {
+                        responseActive = true
+                        play(pcm)
+                        setPhase(.speaking)
+                    }
+                }
+            }
+            if let outTrans = (server["outputTranscription"] as? [String: Any])?["text"] as? String, !outTrans.isEmpty {
+                transcriptDraft += outTrans
+                caption = transcriptDraft
+            }
+            if let inTrans = (server["inputTranscription"] as? [String: Any])?["text"] as? String, !inTrans.isEmpty {
+                heard = inTrans
+                lines.append(Line(fromUser: true, text: inTrans))
+            }
+            if server["turnComplete"] as? Bool == true {
+                responseActive = false
+                if !transcriptDraft.isEmpty {
+                    lines.append(Line(fromUser: false, text: transcriptDraft))
+                    transcriptDraft = ""
+                }
+                if queuedBuffers == 0 { setPhase(.listening) }
+            }
+        }
+        if let toolCall = event["toolCall"] as? [String: Any],
+           let calls = toolCall["functionCalls"] as? [[String: Any]], !calls.isEmpty {
+            setPhase(.thinking)
+            runGeminiTools(calls)
+        }
+    }
+
+    private func runGeminiTools(_ calls: [[String: Any]]) {
+        var remaining = calls.count
+        var responses: [[String: Any]] = []
+        for call in calls {
+            let name = call["name"] as? String ?? ""
+            let callID = call["id"] as? String ?? UUID().uuidString
+            let argsObj = call["args"] as? [String: Any] ?? [:]
+            let arguments = (try? JSONSerialization.data(withJSONObject: argsObj)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            let finish: (String, String?) -> Void = { [weak self] output, _ in
+                Task { @MainActor in
+                    guard let self, self.socket != nil else { return }
+                    responses.append(["id": callID, "name": name, "response": ["result": output]])
+                    remaining -= 1
+                    if remaining == 0 {
+                        self.send(["toolResponse": ["functionResponses": responses]])
+                    }
+                }
+            }
+            switch name {
+            case "look_at_phone_screen":
+                if let frame = ScreenShareFiles.latestFrame() {
+                    finish("Phone screen captured (\(frame.count) bytes).", frame.base64EncodedString())
+                } else {
+                    finish("The phone screen isn't being shared right now.", nil)
+                }
+            case "go_to_sleep":
+                finish("Say a short goodbye.", nil)
+            default:
+                if let runTool { runTool(name, arguments, finish) } else { finish("The Mac isn't connected.", nil) }
+            }
+        }
+    }
+
+    // MARK: Modular Call Mode (Local VAD -> Mac STT + Hermes -> Apple / Mac TTS)
+
+    private func processModularAudio(pcm: Data, loudness: Double) {
+        guard !modularTurnInFlight else { return }
+        let now = Date()
+        let isVoice = loudness > 0.14
+        if isVoice {
+            if phase == .speaking {
+                synthesizer.stopSpeaking(at: .immediate)
+                ttsPlayer?.stop(); ttsPlayer = nil
+                level = 0
+            }
+            if modularSpeechStartedAt == nil {
+                modularSpeechStartedAt = now
+                modularBuffer = Data()
+                setPhase(.hearing)
+            }
+            modularLastVoiceAt = now
+        }
+        if modularSpeechStartedAt != nil {
+            modularBuffer.append(pcm)
+            // Cap single turn at ~25 seconds (~1.2 MB)
+            let tooLong = modularBuffer.count > 1_200_000
+            let silenceDone = modularLastVoiceAt.map { now.timeIntervalSince($0) >= 1.1 } ?? false
+            let spokenEnough = modularSpeechStartedAt.map { now.timeIntervalSince($0) >= 0.35 } ?? false
+            if tooLong || (silenceDone && spokenEnough) {
+                let captured = modularBuffer
+                modularBuffer = Data()
+                modularSpeechStartedAt = nil
+                modularLastVoiceAt = nil
+                submitModularCallTurn(pcm: captured)
+            } else if silenceDone && !spokenEnough {
+                // Brief click/noise: discard
+                modularBuffer = Data()
+                modularSpeechStartedAt = nil
+                modularLastVoiceAt = nil
+                if phase == .hearing { setPhase(.listening) }
+            }
+        }
+    }
+
+    private func submitModularCallTurn(pcm: Data) {
+        guard let runCallTurn else { setPhase(.listening); return }
+        modularTurnInFlight = true
+        setPhase(.thinking)
+        let wav = VoiceAudioCodec.wav(pcm16: pcm, sampleRate: 24000, channels: 1)
+        let payload: [String: Any] = ["context": callContext ?? ""]
+        let meta = (try? JSONSerialization.data(withJSONObject: payload)).flatMap { String(data: $0, encoding: .utf8) }
+        runCallTurn(wav, meta) { [weak self] reply, audioData in
+            Task { @MainActor in
+                guard let self, self.isActive else { return }
+                self.modularTurnInFlight = false
+                if let heard = reply.heard, !heard.isEmpty {
+                    self.heard = heard
+                    self.lines.append(Line(fromUser: true, text: heard))
+                }
+                let text = reply.reply.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else {
+                    self.setPhase(.listening)
+                    return
+                }
+                self.caption = text
+                self.lines.append(Line(fromUser: false, text: text))
+                if let audioData, !audioData.isEmpty {
+                    self.playTTSAudio(audioData)
+                } else {
+                    self.speakLocally(text)
+                }
+            }
+        }
+    }
+
+    private func speakLocally(_ text: String) {
+        setPhase(.speaking)
+        level = 0.55
+        let utterance = AVSpeechUtterance(string: text)
+        let lang = activeConfig.language?.isEmpty == false ? activeConfig.language! : Locale.current.identifier
+        utterance.voice = AVSpeechSynthesisVoice(language: lang) ?? AVSpeechSynthesisVoice(language: "de-DE")
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.04
+        synthesizer.speak(utterance)
+    }
+
+    private func playTTSAudio(_ data: Data) {
+        do {
+            let player = try AVAudioPlayer(data: data)
+            player.delegate = self
+            ttsPlayer = player
+            setPhase(.speaking)
+            level = 0.65
+            player.play()
+        } catch {
+            speakLocally(caption)
         }
     }
 
@@ -342,13 +599,28 @@ final class CallSession: NSObject, ObservableObject {
         }
         guard error == nil, out.frameLength > 0, let samples = out.int16ChannelData?[0] else { return }
         let count = Int(out.frameLength)
-        let audio = Data(bytes: samples, count: count * 2).base64EncodedString()
+        let pcmData = Data(bytes: samples, count: count * 2)
         var sum = 0.0
         for i in 0..<count { let v = Double(samples[i]) / 32768; sum += v * v }
         let loudness = min(1, (sum / Double(max(count, 1))).squareRoot() * 12)
         Task { @MainActor in
             self.micLevel = loudness
-            self.send(["type": "input_audio_buffer.append", "audio": audio])
+            switch self.activeConfig.provider {
+            case "localHermes":
+                self.processModularAudio(pcm: pcmData, loudness: loudness)
+            case "geminiLive":
+                let pcm16k = VoiceAudioCodec.downsample24kTo16k(pcmData)
+                self.send([
+                    "realtimeInput": [
+                        "mediaChunks": [[
+                            "mimeType": "audio/pcm;rate=16000",
+                            "data": pcm16k.base64EncodedString(),
+                        ]]
+                    ]
+                ])
+            default:
+                self.send(["type": "input_audio_buffer.append", "audio": pcmData.base64EncodedString()])
+            }
         }
     }
 
@@ -383,11 +655,30 @@ final class CallSession: NSObject, ObservableObject {
     }
 
     private func stopPlayback() {
-        guard queuedBuffers > 0 else { return }
+        synthesizer.stopSpeaking(at: .immediate)
+        ttsPlayer?.stop(); ttsPlayer = nil
+        guard queuedBuffers > 0 else { level = 0; return }
         player.stop()
         queuedBuffers = 0
         level = 0
         player.play()
+    }
+}
+
+extension CallSession: AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor in
+            self.level = 0
+            if self.phase == .speaking { self.setPhase(.listening) }
+        }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
+            self.ttsPlayer = nil
+            self.level = 0
+            if self.phase == .speaking { self.setPhase(.listening) }
+        }
     }
 }
 

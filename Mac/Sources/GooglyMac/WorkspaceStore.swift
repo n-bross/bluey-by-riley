@@ -38,8 +38,12 @@ final class WorkspaceStore {
             }
         }
         snapshot.pruneTombstones()
-        if snapshot.defaultModel == nil { snapshot.defaultModel = ChatEngine.fallbackModel }
-        if snapshot.models.isEmpty { snapshot.models = [ChatModelInfo(id: ChatEngine.fallbackModel, name: ChatEngine.displayName(ChatEngine.fallbackModel))] }
+        if snapshot.defaultModel == nil { snapshot.defaultModel = ChatEngine.defaultModelID }
+        if snapshot.models.isEmpty {
+            let preferred = ChatEngine.defaultModelID
+            let name = preferred == ChatEngine.hermesModelID ? "Hermes (Subscription)" : ChatEngine.displayName(preferred)
+            snapshot.models = [ChatModelInfo(id: preferred, name: name)]
+        }
     }
 
     func enableHermes(_ gateway: HermesGateway) {
@@ -140,9 +144,13 @@ final class WorkspaceStore {
         Task { @MainActor in
             let models = await ChatEngine.models()
             guard !models.isEmpty else { return }
-            snapshot.models = hermes == nil ? models : [Self.hermesModel] + models
+            let deduped = models.filter { $0.id != Self.hermesModel.id }
+            snapshot.models = (hermes == nil && !models.contains(where: { $0.id == Self.hermesModel.id }))
+                ? models
+                : [Self.hermesModel] + deduped
+            let preferred = ChatEngine.defaultModelID
             if let current = snapshot.defaultModel, !snapshot.models.contains(where: { $0.id == current }) {
-                snapshot.defaultModel = models.first(where: { $0.id == ChatEngine.fallbackModel })?.id ?? models.first?.id
+                snapshot.defaultModel = snapshot.models.first(where: { $0.id == preferred })?.id ?? snapshot.models.first?.id
             }
             publishSoon()
         }

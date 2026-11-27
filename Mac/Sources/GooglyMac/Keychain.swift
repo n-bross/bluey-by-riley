@@ -3,8 +3,12 @@ import Foundation
 /// API keys live in a private file in ~/Library/Application Support/Googly (readable only by you),
 /// never in the project folder or git. Unlike the Keychain, this never asks for your password.
 enum Keychain {
-    enum Key: String {
+    enum Key: String, CaseIterable {
         case openai
+        case gemini
+        case elevenlabs
+        case customLLM
+        case customSTT
     }
 
     private static var cache: [String: String]?

@@ -154,9 +154,12 @@ struct WorkspaceRootView<Face: View, Settings: View>: View {
             Spacer()
             if let openMeetings {
                 Button(action: openMeetings) {
-                    Image(systemName: "waveform.and.mic").frame(width: 32, height: 30)
+                    Image(systemName: "waveform.and.mic")
+                        .frame(width: 32, height: 30)
+                        .foregroundStyle(Theme.soft)
                 }
-                .help("Call-Notizen öffnen (⌃⌥M)").accessibilityLabel("Call-Notizen öffnen")
+                .help("Call-Notizen (⌃⌥M)")
+                .accessibilityLabel("Call-Notizen")
             }
             Button(action: openSettings) {
                 Image(systemName: "gearshape").frame(width: 32, height: 30)

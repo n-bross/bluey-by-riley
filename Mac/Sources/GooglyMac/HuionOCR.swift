@@ -154,9 +154,9 @@ enum HuionOCR {
         }
     }
 
-    /// Transcribes a handwritten `InkDrawing` using OpenAI Responses API with structured JSON output.
+    /// Transcribes a handwritten `InkDrawing` using the configured LLM provider
+    /// (Hermes Subscription + Apple Vision local OCR, Custom OpenAI-compatible Vision, or OpenAI Responses).
     static func transcribe(_ drawing: InkDrawing, model: String = ChatEngine.fallbackModel) async throws -> Result {
-        guard let key = Keychain.get(.openai), !key.isEmpty else { throw Failure.noKey }
         guard let png = InkRenderer.pngData(for: drawing, width: 1600, forceLightPaper: true) else {
             throw Failure.renderFailed
         }
@@ -168,6 +168,46 @@ enum HuionOCR {
         - Gib einen kurzen, prägnanten Titel zurück.
         - Extrahiere alle klar erkennbaren Aufgaben / Checkboxen / Action-Items zusätzlich als kurze Strings im Feld `todos` (leer lassen, wenn es keine Aufgaben sind).
         """
+
+        let provider = Settings.shared.llmProvider
+        if provider != .openai {
+            let jsonInstructions = """
+            Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Objekt (ohne Markdown-Codeblock):
+            {"title":"...","markdown":"...","todos":["..."]}
+            """
+            if provider == .hermes {
+                // Local Apple Vision OCR (0 €) -> Hermes (Subscription, 0 € API) structures title, Markdown & todos.
+                let rawText = LocalOCR.recognize(imageData: png) ?? ""
+                guard !rawText.isEmpty else {
+                    return Result(title: "Handschrift-Notiz", markdown: "_Kein lesbarer Text erkannt._", todos: [])
+                }
+                if let structured = try? await LLMService.complete(
+                    prompt: "\(prompt)\n\nLokal erkannter Text (Apple Vision OCR):\n\(rawText)",
+                    instructions: jsonInstructions,
+                    provider: .hermes,
+                    hermesSession: "bluey-ocr",
+                    timeout: 45
+                ), let parsed = decodeJSONResult(structured) {
+                    return parsed
+                }
+                let firstLine = rawText.split(separator: "\n").first.map(String.init) ?? "Handschrift-Notiz"
+                return Result(title: String(firstLine.prefix(60)), markdown: rawText, todos: [])
+            } else {
+                let raw = try await LLMService.complete(
+                    prompt: prompt,
+                    instructions: jsonInstructions,
+                    images: [("image/png", png)],
+                    provider: .openAICompatible,
+                    timeout: 90
+                )
+                guard let parsed = decodeJSONResult(raw) else {
+                    throw Failure.apiError("OCR-Antwort konnte nicht gelesen werden.")
+                }
+                return parsed
+            }
+        }
+
+        guard let key = Keychain.get(.openai), !key.isEmpty else { throw Failure.noKey }
 
         let schema: [String: Any] = [
             "type": "object",
@@ -220,6 +260,12 @@ enum HuionOCR {
             throw Failure.apiError("OCR-Antwort konnte nicht gelesen werden.")
         }
         return parsed
+    }
+
+    private static func decodeJSONResult(_ raw: String) -> Result? {
+        guard let start = raw.firstIndex(of: "{"), let end = raw.lastIndex(of: "}") else { return nil }
+        let slice = String(raw[start...end])
+        return try? JSONDecoder().decode(Result.self, from: Data(slice.utf8))
     }
 
     private static func extractOutputText(from json: [String: Any]?) -> String? {

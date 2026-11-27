@@ -262,8 +262,8 @@ enum MeetingTaskParser {
     }
 }
 
-@available(macOS 15, *)
-struct DrawingEvent: Codable, Identifiable, Equatable {
+/// A live Huion / screen drawing captured during a meeting with its exact video timecode.
+struct MeetingDrawingEvent: Codable, Identifiable, Equatable, Sendable {
     var id = UUID()
     var timestamp = Date()
     /// Elapsed seconds since `session.started` (the exact time in the meeting/video).
@@ -288,7 +288,7 @@ struct MeetingSession: Codable, Identifiable {
     var ended: Date?
     var clips: [MeetingAudio.Clip] = []
     var messages: [ChatMessage] = []
-    var drawings: [DrawingEvent] = []
+    var drawings: [MeetingDrawingEvent] = []
     var screenshots: [MeetingAudio.Screenshot] = []
     var videoFilename: String?
     var manualNotes = ""
@@ -304,7 +304,7 @@ struct MeetingSession: Codable, Identifiable {
         ended: Date? = nil,
         clips: [MeetingAudio.Clip] = [],
         messages: [ChatMessage] = [],
-        drawings: [DrawingEvent] = [],
+        drawings: [MeetingDrawingEvent] = [],
         screenshots: [MeetingAudio.Screenshot] = [],
         videoFilename: String? = nil,
         manualNotes: String = "",
@@ -337,12 +337,12 @@ struct MeetingSession: Codable, Identifiable {
         ended = try c.decodeIfPresent(Date.self, forKey: .ended)
         clips = try c.decodeIfPresent([MeetingAudio.Clip].self, forKey: .clips) ?? []
         messages = try c.decodeIfPresent([ChatMessage].self, forKey: .messages) ?? []
-        drawings = try c.decodeIfPresent([DrawingEvent].self, forKey: .drawings) ?? []
+        drawings = (try? c.decodeIfPresent([MeetingDrawingEvent].self, forKey: .drawings)) ?? []
         if let filenames = try? c.decode([String].self, forKey: .screenshots) {
             let captureStart = started
             screenshots = filenames.map { MeetingAudio.Screenshot(filename: $0, captured: captureStart, manual: false) }
         } else {
-            screenshots = try c.decodeIfPresent([MeetingAudio.Screenshot].self, forKey: .screenshots) ?? []
+            screenshots = (try? c.decode([MeetingAudio.Screenshot].self, forKey: .screenshots)) ?? []
         }
         videoFilename = try c.decodeIfPresent(String.self, forKey: .videoFilename)
         manualNotes = try c.decodeIfPresent(String.self, forKey: .manualNotes) ?? ""
@@ -353,7 +353,6 @@ struct MeetingSession: Codable, Identifiable {
 
     var folder: URL { MeetingNotes.folder(session: id.uuidString, started: started) }
     var audioFolder: URL { folder.appendingPathComponent("audio", isDirectory: true) }
-
     var notesURL: URL { folder.appendingPathComponent("notes.md") }
     var videoURL: URL? { videoFilename.map { folder.appendingPathComponent($0) } }
     var drawingsFolder: URL { folder.appendingPathComponent("drawings", isDirectory: true) }

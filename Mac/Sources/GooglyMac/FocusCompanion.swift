@@ -29,6 +29,8 @@ final class FocusCompanion {
     private var lastPing = -Double.infinity
     private var lastTick = ProcessInfo.processInfo.systemUptime
     private var lastCheck: Double = 0
+    private var lastOnTaskFingerprint: String?
+    private var lastOnTaskTime: Double = -Double.infinity
     private var policy = FocusNudgePolicy()
     private var timer: Timer?
     private var work: Task<Void, Never>?
@@ -49,7 +51,7 @@ final class FocusCompanion {
 
     init(now: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime },
          permission: @escaping () -> Bool = { CGPreflightScreenCaptureAccess() },
-         hasKey: @escaping () -> Bool = { Keychain.get(.openai) != nil },
+         hasKey: @escaping () -> Bool = { MainActor.assumeIsolated { AIServices.isFocusConfigured } },
          screenUnlocked: @escaping () -> Bool = {
             let session = CGSessionCopyCurrentDictionary() as? [String: Any]
             return session?["CGSSessionScreenIsLocked"] as? Bool != true && session?["kCGSessionOnConsoleKey"] as? Bool != false
@@ -124,8 +126,9 @@ final class FocusCompanion {
         guard !hasSession else { return "There's already a focus session. End it before starting another." }
         guard freshConnection else { return "Connect the paired phone first." }
         guard permission() else { return "Screen Recording is off. Enable Bluey in System Settings > Privacy & Security > Screen Recording, then reopen Bluey." }
-        guard hasKey() else { return "Add your OpenAI key in Bluey's Mac menu." }
+        guard hasKey() else { return AIServices.missingFocusMessage }
         cancel()
+        lastOnTaskFingerprint = nil; lastOnTaskTime = -Double.infinity
         let skipped = rest != nil
         rest = nil; lastBreakTick = nil; lastTask = task
         steering?.reset()
@@ -201,7 +204,22 @@ final class FocusCompanion {
                 let screen = try await self.capture()
                 guard self.allowed, self.generation == token, !Task.isCancelled else { return }
                 let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: UInt32.max) ?? .null)
-                let answer = try await self.classify(screen, session, idle.isFinite ? idle : 0)
+                let fingerprint = (screen.app ?? "") + "|" + screen.lines.prefix(30).map(\.line.text).joined(separator: "\n")
+                let answer: FocusDecision
+                if Settings.shared.focusSkipUnchanged,
+                   !fingerprint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   fingerprint == self.lastOnTaskFingerprint,
+                   began - self.lastOnTaskTime < 90 {
+                    answer = FocusDecision(activity: .onTask, probability: 0.05, confidence: 0.9, probabilities: ["on_task": 0.9], distraction: nil)
+                } else {
+                    answer = try await self.classify(screen, session, idle.isFinite ? idle : 0)
+                    if answer.activity == .onTask {
+                        self.lastOnTaskFingerprint = fingerprint
+                        self.lastOnTaskTime = self.now()
+                    } else {
+                        self.lastOnTaskFingerprint = nil
+                    }
+                }
                 guard self.allowed, self.generation == token, !Task.isCancelled else { return }
                 let age = now() - began
                 let activity: FocusActivity = age <= 20 ? answer.activity : .unavailable
